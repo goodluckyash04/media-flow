@@ -46,7 +46,7 @@ class DownloadForm(forms.Form):
         widget=forms.URLInput(
             attrs={
                 "class": "form-control form-control-lg",
-                "placeholder": "https://www.youtube.com/watch?v=...",
+                "placeholder": "https://music.youtube.com/watch?v=... or https://youtube.com/...",
                 "autocomplete": "off",
                 "id": "id_url",
             }
@@ -122,7 +122,7 @@ class PlaylistForm(forms.Form):
         widget=forms.URLInput(
             attrs={
                 "class": "form-control form-control-lg",
-                "placeholder": "https://www.youtube.com/playlist?list=...",
+                "placeholder": "https://music.youtube.com/playlist?list=... or https://youtube.com/...",
                 "autocomplete": "off",
                 "id": "id_pl_url",
             }

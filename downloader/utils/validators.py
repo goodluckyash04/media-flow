@@ -6,7 +6,7 @@ import ipaddress
 import re
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -43,6 +43,9 @@ def _is_private_ip(host: str) -> bool:
 def validate_url(url: str) -> str:
     """
     Validate and normalise a media URL.
+    - Rejects invalid schemes, localhost, and private IPs.
+    - Validates YouTube and YouTube Music video/playlist query parameters.
+    - Normalises music.youtube.com to www.youtube.com for seamless yt-dlp extraction.
     Raises ValidationError on failure.
     Returns the cleaned URL string.
     """
@@ -70,6 +73,42 @@ def validate_url(url: str) -> str:
     # Block localhost names
     if host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
         raise ValidationError("URLs pointing to localhost are not permitted.")
+
+    # Validation & normalisation for YouTube / YouTube Music
+    lower_host = host.lower()
+    is_yt = lower_host in (
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
+        "www.music.youtube.com",
+        "youtu.be",
+    )
+    if is_yt:
+        path = parsed.path.rstrip("/")
+        query = parse_qs(parsed.query)
+
+        if lower_host != "youtu.be":
+            if path == "/watch" and "v" not in query:
+                raise ValidationError(
+                    "YouTube and YouTube Music track URLs must include the video ID (e.g. https://music.youtube.com/watch?v=...)."
+                )
+            if path == "/playlist" and "list" not in query:
+                raise ValidationError(
+                    "Playlist URLs must include the playlist ID (e.g. ?list=...)."
+                )
+
+        # Strip tracking parameters: 'si', 'feature', 'pp'
+        if parsed.query:
+            pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            filtered = [(k, v) for k, v in pairs if k.lower() not in ("si", "feature", "pp")]
+            parsed = parsed._replace(query=urlencode(filtered))
+
+        # Normalise music.youtube.com to www.youtube.com for 100% extraction compatibility
+        if lower_host in ("music.youtube.com", "www.music.youtube.com"):
+            parsed = parsed._replace(netloc="www.youtube.com")
+
+        return urlunparse(parsed)
 
     return url
 

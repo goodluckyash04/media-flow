@@ -23,6 +23,7 @@
           <div class="mb-3">
             <label class="form-label" for="id_pl_url">Playlist URL</label>
             {{ form.url }}
+            <div class="form-text">Supports <strong>YouTube Music</strong> playlists & albums, YouTube playlists, SoundCloud sets, etc.</div>
           </div>
           <div class="row g-3 mb-3">
             <div class="col-6">
@@ -171,8 +172,41 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function cleanMediaUrl(raw) {
+    if (!raw) return raw;
+    let val = raw.trim();
+    try {
+      const u = new URL(val);
+      if (u.hostname.includes('youtube.com') || u.hostname === 'youtu.be') {
+        u.searchParams.delete('si');
+        u.searchParams.delete('pp');
+        if (u.searchParams.get('feature') === 'share') {
+          u.searchParams.delete('feature');
+        }
+        return u.toString();
+      }
+    } catch(e) {
+      val = val.replace(/([?&])si=[^&]*(&|$)/, (m, p1, p2) => p2 === '&' ? p1 : '');
+    }
+    return val;
+  }
+
+  const plUrlInput = document.getElementById('id_pl_url');
+  if (plUrlInput) {
+    function handlePlUrl() {
+      const cleaned = cleanMediaUrl(plUrlInput.value);
+      if (cleaned !== plUrlInput.value) {
+        plUrlInput.value = cleaned;
+      }
+    }
+    plUrlInput.addEventListener('input', handlePlUrl);
+    plUrlInput.addEventListener('paste', () => setTimeout(handlePlUrl, 10));
+    plUrlInput.addEventListener('change', handlePlUrl);
+  }
+
   document.getElementById('inspectPlaylistBtn').addEventListener('click', async () => {
-    const url = document.getElementById('id_pl_url').value.trim();
+    const url = cleanMediaUrl(document.getElementById('id_pl_url').value.trim());
+    document.getElementById('id_pl_url').value = url;
     if (!url) { window.MF.toast('Please enter a playlist URL.', 'warning'); return; }
     showSpinner(true);
     try {

@@ -280,24 +280,124 @@ document.addEventListener('click', async e => {
   const POLL_MS = {{ POLL_INTERVAL_MS }};
   const csrfToken = window.MF ? window.MF.getCsrf() : '';
 
+  const statusLabels = {
+    queued: 'Queued',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled'
+  };
+
   function updateDownloadRow(job) {
     const row = document.getElementById(`dl-row-${job.id}`);
     if (!row) return;
-    const cell = row.querySelector('.job-progress-cell');
-    if (!cell) return;
 
-    const pct = Math.round(job.progress_pct || 0);
-    if (job.status === 'running' || job.status === 'queued') {
-      cell.innerHTML = `
-        <div class="progress"><div class="progress-bar${job.status==='running'?' progress-bar-animated progress-bar-striped':''}"
-             style="width:${pct}%"></div></div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">
-          ${pct}%${job.speed ? ' · ' + job.speed : ''}${job.eta ? ' · ETA ' + job.eta : ''}
-        </div>`;
+    row.dataset.status = job.status;
+
+    // Status badge (column 4)
+    if (row.cells && row.cells[3]) {
+      row.cells[3].innerHTML = `<span class="badge badge-${job.status}">${statusLabels[job.status] || job.status}</span>`;
     }
 
+    // Progress cell
+    const cell = row.querySelector('.job-progress-cell');
+    if (cell) {
+      const pct = Math.round(job.progress_pct || 0);
+      if (job.status === 'completed') {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar bg-success" style="width:100%"></div></div>
+          <div style="font-size:0.72rem;color:var(--success);margin-top:2px;">100%</div>`;
+      } else if (job.status === 'failed') {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar bg-danger" style="width:100%"></div></div>
+          <div style="font-size:0.72rem;color:var(--danger);margin-top:2px;">Failed</div>`;
+      } else if (job.status === 'cancelled') {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar bg-secondary" style="width:100%"></div></div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Cancelled</div>`;
+      } else {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar${job.status==='running'?' progress-bar-animated progress-bar-striped':''}"
+               style="width:${pct}%"></div></div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">
+            ${pct}%${job.speed ? ' · ' + job.speed : ''}${job.eta ? ' · ETA ' + job.eta : ''}
+          </div>`;
+      }
+    }
+
+    // Stage text
     const stageEl = row.querySelector('.job-stage');
-    if (stageEl) stageEl.textContent = job.stage || '';
+    if (stageEl) {
+      stageEl.textContent = job.status === 'completed' ? 'Complete' : (job.stage || '');
+    }
+
+    // Action buttons
+    if (job.status === 'completed') {
+      const cancelBtn = row.querySelector('.btn-cancel');
+      if (cancelBtn) cancelBtn.remove();
+      const actionsGroup = row.querySelector('.d-flex.gap-1');
+      if (actionsGroup && job.output_path && !actionsGroup.querySelector('.btn-open-folder')) {
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn btn-secondary btn-sm btn-open-folder';
+        openBtn.dataset.jobId = job.id;
+        openBtn.title = 'Open folder';
+        openBtn.innerHTML = '<i class="bi bi-folder2-open"></i>';
+        actionsGroup.appendChild(openBtn);
+      }
+    }
+  }
+
+  function updateConversionRow(job) {
+    const row = document.getElementById(`conv-row-${job.id}`);
+    if (!row) return;
+
+    row.dataset.status = job.status;
+
+    // Status badge (column 3)
+    if (row.cells && row.cells[2]) {
+      row.cells[2].innerHTML = `<span class="badge badge-${job.status}">${statusLabels[job.status] || job.status}</span>`;
+    }
+
+    // Progress cell
+    const cell = row.querySelector('.job-progress-cell');
+    if (cell) {
+      const pct = Math.round(job.progress_pct || 0);
+      if (job.status === 'completed') {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar bg-success" style="width:100%"></div></div>
+          <div style="font-size:0.72rem;color:var(--success);margin-top:2px;">100%</div>`;
+      } else if (job.status === 'failed') {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar bg-danger" style="width:100%"></div></div>
+          <div style="font-size:0.72rem;color:var(--danger);margin-top:2px;">Failed</div>`;
+      } else {
+        cell.innerHTML = `
+          <div class="progress"><div class="progress-bar${job.status==='running'?' progress-bar-animated progress-bar-striped':''}"
+               style="width:${pct}%"></div></div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${pct}%</div>`;
+      }
+    }
+
+    // Stage text
+    const stageEl = row.querySelector('.job-stage');
+    if (stageEl) {
+      stageEl.textContent = job.status === 'completed' ? 'Complete' : (job.stage || '');
+    }
+
+    // Action buttons
+    if (job.status === 'completed') {
+      const cancelBtn = row.querySelector('.btn-cancel');
+      if (cancelBtn) cancelBtn.remove();
+      const actionsGroup = row.querySelector('.d-flex.gap-1');
+      if (actionsGroup && job.output_path && !actionsGroup.querySelector('.btn-open-folder')) {
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn btn-secondary btn-sm btn-open-folder';
+        openBtn.dataset.jobId = job.id;
+        openBtn.title = 'Open folder';
+        openBtn.innerHTML = '<i class="bi bi-folder2-open"></i>';
+        actionsGroup.appendChild(openBtn);
+      }
+    }
   }
 
   setInterval(async () => {
@@ -306,18 +406,25 @@ document.addEventListener('click', async e => {
       const data = await r.json();
       if (!data.ok) return;
 
-      const dlCount = data.downloads.length;
-      const convCount = data.conversions.length;
+      const dlCount = data.active_downloads_count !== undefined ?
+        data.active_downloads_count : data.downloads.filter(d => d.status === 'running' || d.status === 'queued').length;
+      const convCount = data.active_conversions_count !== undefined ?
+        data.active_conversions_count : data.conversions.filter(c => c.status === 'running' || c.status === 'queued').length;
 
       const dlBadge = document.getElementById('dl-active-count');
-      dlBadge.textContent = dlCount;
-      dlBadge.style.display = dlCount > 0 ? '' : 'none';
+      if (dlBadge) {
+        dlBadge.textContent = dlCount;
+        dlBadge.style.display = dlCount > 0 ? '' : 'none';
+      }
 
       const convBadge = document.getElementById('conv-active-count');
-      convBadge.textContent = convCount;
-      convBadge.style.display = convCount > 0 ? '' : 'none';
+      if (convBadge) {
+        convBadge.textContent = convCount;
+        convBadge.style.display = convCount > 0 ? '' : 'none';
+      }
 
       data.downloads.forEach(updateDownloadRow);
+      data.conversions.forEach(updateConversionRow);
 
       // Update sidebar
       const sidebarBadge = document.getElementById('sidebar-active-count');

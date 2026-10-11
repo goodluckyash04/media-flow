@@ -16,13 +16,41 @@
   const qualityInfoText = document.getElementById('qualityInfoText');
   const audioOnlyCheck = document.getElementById('id_audio_only');
 
-  // Enable inspect button when URL is typed
+  // Helper: Automatically strip tracking parameters (si, feature, pp) from YouTube URLs
+  function cleanMediaUrl(raw) {
+    if (!raw) return raw;
+    let val = raw.trim();
+    try {
+      const u = new URL(val);
+      if (u.hostname.includes('youtube.com') || u.hostname === 'youtu.be') {
+        u.searchParams.delete('si');
+        u.searchParams.delete('pp');
+        if (u.searchParams.get('feature') === 'share') {
+          u.searchParams.delete('feature');
+        }
+        return u.toString();
+      }
+    } catch(e) {
+      val = val.replace(/([?&])si=[^&]*(&|$)/, (m, p1, p2) => p2 === '&' ? p1 : '');
+    }
+    return val;
+  }
+
+  // Enable inspect button when URL is typed, auto-strip tracking params
   if (urlInput) {
-    urlInput.addEventListener('input', () => {
+    function handleUrlInput() {
+      const cleaned = cleanMediaUrl(urlInput.value);
+      if (cleaned !== urlInput.value) {
+        urlInput.value = cleaned;
+      }
       const hasUrl = urlInput.value.trim().length > 8;
       inspectBtn.disabled = !hasUrl;
       downloadBtn.disabled = !hasUrl;
-    });
+    }
+
+    urlInput.addEventListener('input', handleUrlInput);
+    urlInput.addEventListener('paste', () => setTimeout(handleUrlInput, 10));
+    urlInput.addEventListener('change', handleUrlInput);
   }
 
   // Quality info update
@@ -124,7 +152,8 @@
   // Inspect button
   if (inspectBtn) {
     inspectBtn.addEventListener('click', async () => {
-      const url = urlInput.value.trim();
+      const url = cleanMediaUrl(urlInput.value.trim());
+      urlInput.value = url;
       if (!url) return;
 
       inspectBtn.disabled = true;

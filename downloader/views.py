@@ -439,23 +439,40 @@ def conversion_progress(request, job_id):
 
 
 def queue_status(request):
-    """Return summary of all active jobs for the queue page polling."""
-    active_downloads = DownloadJob.objects.filter(
-        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-    ).values("id", "title", "status", "progress_pct", "speed", "eta", "stage", "job_type")
+    """Return summary of all active jobs and recently finished jobs for queue/dashboard polling."""
+    import datetime
+    from django.db.models import Q
 
-    active_conversions = ConversionJob.objects.filter(
+    recent_cutoff = timezone.now() - datetime.timedelta(seconds=60)
+
+    downloads = DownloadJob.objects.filter(
+        Q(status__in=[JobStatus.QUEUED, JobStatus.RUNNING]) |
+        Q(completed_at__gte=recent_cutoff)
+    ).values("id", "title", "status", "progress_pct", "speed", "eta", "stage", "job_type", "error_message", "output_path")
+
+    conversions = ConversionJob.objects.filter(
+        Q(status__in=[JobStatus.QUEUED, JobStatus.RUNNING]) |
+        Q(completed_at__gte=recent_cutoff)
+    ).values("id", "input_filename", "output_format", "status", "progress_pct", "stage", "error_message", "output_path")
+
+    active_dl_count = DownloadJob.objects.filter(
         status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-    ).values("id", "input_filename", "output_format", "status", "progress_pct", "stage")
+    ).count()
+    active_conv_count = ConversionJob.objects.filter(
+        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
+    ).count()
 
     return _json_ok(
         {
             "downloads": [
-                {**d, "id": str(d["id"])} for d in active_downloads
+                {**d, "id": str(d["id"])} for d in downloads
             ],
             "conversions": [
-                {**c, "id": str(c["id"])} for c in active_conversions
+                {**c, "id": str(c["id"])} for c in conversions
             ],
+            "active_downloads_count": active_dl_count,
+            "active_conversions_count": active_conv_count,
+            "active_total": active_dl_count + active_conv_count,
         }
     )
 

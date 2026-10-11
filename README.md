@@ -9,13 +9,14 @@ MediaFlow is a self-hosted, local-first web application designed for fast, high-
 ## 🌟 Key Features
 
 - **⚡ Fast URL Media Downloader**
+  - Full support for **YouTube Music**, YouTube, SoundCloud, and 1000+ streaming sites.
   - Instant URL metadata inspection with preview thumbnails, title, duration, and channel.
   - High-fidelity audio extraction (MP3, M4A, FLAC, WAV, Opus).
   - Quality presets: *Best (320 kbps / lossless)*, *High (256 kbps)*, *Medium (192 kbps)*, and *Standard (128 kbps)*.
   - Embedded metadata (artist, title, album, thumbnail artwork) using mutagen & FFmpeg.
 
 - **📑 Playlist & Batch Downloader**
-  - Paste any supported playlist URL (YouTube, SoundCloud, etc.).
+  - Paste any supported playlist or album URL (**YouTube Music albums & playlists**, YouTube playlists, SoundCloud sets).
   - Interactive tracklist preview with individual selection checkboxes.
   - Batch download queue with item-level progress bars and status badges.
 

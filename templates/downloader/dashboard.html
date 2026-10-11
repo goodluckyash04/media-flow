@@ -191,9 +191,41 @@
     const row = tbody.querySelector(`tr[data-job-id="${job.id}"]`);
     if (!row) return;
     const bar = row.querySelector('.progress-bar');
-    if (bar) bar.style.width = job.progress_pct + '%';
-    const pctEl = row.querySelector('.progress + div');
-    if (pctEl) pctEl.textContent = Math.round(job.progress_pct) + '%' + (job.stage ? ' · ' + job.stage : '');
+    const pct = Math.round(job.progress_pct || 0);
+
+    if (job.status === 'completed') {
+      if (bar) {
+        bar.style.width = '100%';
+        bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        bar.classList.add('bg-success');
+      }
+      const pctEl = row.querySelector('.progress + div');
+      if (pctEl) {
+        pctEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>100% · Complete</span>';
+      }
+      // After a short delay, remove completed row from active jobs
+      setTimeout(() => {
+        row.style.transition = 'opacity 0.5s ease';
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          if (tbody.querySelectorAll('tr').length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color:var(--text-muted);"><i class="bi bi-check2-circle text-success me-1"></i>All active downloads complete!</td></tr>';
+          }
+        }, 500);
+      }, 1500);
+    } else if (job.status === 'failed') {
+      if (bar) {
+        bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        bar.classList.add('bg-danger');
+      }
+      const pctEl = row.querySelector('.progress + div');
+      if (pctEl) pctEl.innerHTML = '<span class="text-danger">Failed</span>';
+    } else {
+      if (bar) bar.style.width = pct + '%';
+      const pctEl = row.querySelector('.progress + div');
+      if (pctEl) pctEl.textContent = pct + '%' + (job.stage ? ' · ' + job.stage : '');
+    }
   }
 
   setInterval(async () => {
@@ -202,13 +234,14 @@
       const data = await r.json();
       if (data.ok) {
         data.downloads.forEach(updateRow);
-        const count = data.downloads.length + data.conversions.length;
+        const count = data.active_total !== undefined ? data.active_total : (data.downloads.length + data.conversions.length);
         const badge = document.getElementById('sidebar-active-count');
         if (badge) {
           badge.textContent = count;
           badge.style.display = count > 0 ? '' : 'none';
         }
-        document.getElementById('stat-active').textContent = count;
+        const statActive = document.getElementById('stat-active');
+        if (statActive) statActive.textContent = count;
       }
     } catch(e) {}
   }, {{ POLL_INTERVAL_MS }});

@@ -18,6 +18,25 @@ def test_validate_url_valid():
     assert validate_url("http://example.com/audio.mp3") == "http://example.com/audio.mp3"
 
 
+def test_validate_url_youtube_music():
+    # YouTube Music URLs are normalised to www.youtube.com for 100% extraction compatibility
+    normalized = validate_url("https://music.youtube.com/watch?v=s2HYl12gmOY")
+    assert normalized == "https://www.youtube.com/watch?v=s2HYl12gmOY"
+
+    # Tracking parameters (si, feature, pp) are automatically stripped
+    assert validate_url("https://music.youtube.com/watch?v=s2HYl12gmOY&si=TrackId123") == "https://www.youtube.com/watch?v=s2HYl12gmOY"
+    assert validate_url("https://www.youtube.com/watch?v=s2HYl12gmOY&si=TrackId123&feature=share") == "https://www.youtube.com/watch?v=s2HYl12gmOY"
+    assert validate_url("https://youtu.be/s2HYl12gmOY?si=TrackId123") == "https://youtu.be/s2HYl12gmOY"
+
+    # YouTube Music watch URL missing video ID
+    with pytest.raises(ValidationError, match="must include the video ID"):
+        validate_url("https://music.youtube.com/watch")
+
+    # YouTube playlist URL missing list ID
+    with pytest.raises(ValidationError, match="must include the playlist ID"):
+        validate_url("https://music.youtube.com/playlist")
+
+
 def test_validate_url_invalid():
     with pytest.raises(ValidationError, match="URL is required"):
         validate_url("")
