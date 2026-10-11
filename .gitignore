@@ -57,3 +57,7 @@ temp_*
 
 # Thumbnails cache
 .thumbnails/
+
+# Local binaries (FFmpeg/FFprobe)
+bin/
+*.exe

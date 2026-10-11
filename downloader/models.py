@@ -106,7 +106,30 @@ class AppSettings(models.Model):
                 "theme": django_settings.DEFAULT_THEME,
             },
         )
+        if not created and (obj.ffmpeg_path == "ffmpeg" or not obj.ffmpeg_path):
+            if django_settings.FFMPEG_PATH != "ffmpeg":
+                obj.ffmpeg_path = django_settings.FFMPEG_PATH
+                obj.ffprobe_path = django_settings.FFPROBE_PATH
+                obj.save(update_fields=["ffmpeg_path", "ffprobe_path"])
         return obj
+
+    @property
+    def resolved_ffmpeg_path(self) -> str:
+        from django.conf import settings as django_settings
+        if self.ffmpeg_path and Path(self.ffmpeg_path).exists():
+            return self.ffmpeg_path
+        if django_settings.FFMPEG_PATH and Path(django_settings.FFMPEG_PATH).exists():
+            return django_settings.FFMPEG_PATH
+        return self.ffmpeg_path or django_settings.FFMPEG_PATH
+
+    @property
+    def resolved_ffprobe_path(self) -> str:
+        from django.conf import settings as django_settings
+        if self.ffprobe_path and Path(self.ffprobe_path).exists():
+            return self.ffprobe_path
+        if django_settings.FFPROBE_PATH and Path(django_settings.FFPROBE_PATH).exists():
+            return django_settings.FFPROBE_PATH
+        return self.ffprobe_path or django_settings.FFPROBE_PATH
 
     @property
     def download_dir_path(self) -> Path:
@@ -192,13 +215,8 @@ class DownloadJob(models.Model):
 
     @property
     def file_size_display(self) -> str:
-        if not self.file_size:
-            return ""
-        for unit in ("B", "KB", "MB", "GB"):
-            if self.file_size < 1024:
-                return f"{self.file_size:.1f} {unit}"
-            self.file_size /= 1024
-        return f"{self.file_size:.1f} TB"
+        from downloader.utils.file_utils import human_readable_size
+        return human_readable_size(self.file_size)
 
     @property
     def is_active(self) -> bool:

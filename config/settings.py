@@ -35,6 +35,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8001",
 ]
 
+FORMS_URLFIELD_ASSUME_HTTPS = True
+
 # ---------------------------------------------------------------------------
 # Application definition
 # ---------------------------------------------------------------------------
@@ -177,9 +179,12 @@ DEFAULT_DOWNLOAD_DIR = Path(
     os.getenv("DEFAULT_DOWNLOAD_DIR", "") or _default_download
 )
 
-# FFmpeg / FFprobe
-FFMPEG_PATH = os.getenv("FFMPEG_PATH", "") or "ffmpeg"
-FFPROBE_PATH = os.getenv("FFPROBE_PATH", "") or "ffprobe"
+# FFmpeg / FFprobe (defaults to project-local bin/ if present)
+_local_ffmpeg = BASE_DIR / "bin" / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+_local_ffprobe = BASE_DIR / "bin" / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
+
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", "") or (str(_local_ffmpeg) if _local_ffmpeg.exists() else "ffmpeg")
+FFPROBE_PATH = os.getenv("FFPROBE_PATH", "") or (str(_local_ffprobe) if _local_ffprobe.exists() else "ffprobe")
 
 # Job concurrency
 MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "3"))

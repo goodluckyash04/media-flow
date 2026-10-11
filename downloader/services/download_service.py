@@ -304,7 +304,7 @@ def _build_ydl_opts(
         "no_warnings": True,
         "progress_hooks": [hook],
         "outtmpl": str(output_dir / template),
-        "ffmpeg_location": app_cfg.ffmpeg_path or settings.FFMPEG_PATH,
+        "ffmpeg_location": app_cfg.resolved_ffmpeg_path,
         "noplaylist": True,
         "retries": 3,
         "fragment_retries": 3,

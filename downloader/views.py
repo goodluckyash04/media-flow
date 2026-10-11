@@ -285,7 +285,7 @@ def converter_view(request):
     app_cfg = _get_app_settings()
 
     from downloader.services.conversion_service import detect_ffmpeg
-    ffmpeg_ok, ffmpeg_ver = detect_ffmpeg(app_cfg.ffmpeg_path or "ffmpeg")
+    ffmpeg_ok, ffmpeg_ver = detect_ffmpeg(app_cfg.resolved_ffmpeg_path)
 
     if request.method == "POST":
         form = ConversionForm(request.POST)
@@ -661,8 +661,8 @@ def settings_view(request):
     app_cfg = _get_app_settings()
 
     from downloader.services.conversion_service import detect_ffmpeg, detect_ffprobe
-    ffmpeg_ok, ffmpeg_ver = detect_ffmpeg(app_cfg.ffmpeg_path or "ffmpeg")
-    ffprobe_ok, ffprobe_ver = detect_ffprobe(app_cfg.ffprobe_path or "ffprobe")
+    ffmpeg_ok, ffmpeg_ver = detect_ffmpeg(app_cfg.resolved_ffmpeg_path)
+    ffprobe_ok, ffprobe_ver = detect_ffprobe(app_cfg.resolved_ffprobe_path)
 
     # yt-dlp version
     try:

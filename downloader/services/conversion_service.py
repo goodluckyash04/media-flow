@@ -80,7 +80,7 @@ def probe_file(file_path: Path) -> Dict:
     Returns a dict with: duration, audio_codec, video_codec, format_name, size.
     """
     app_cfg = AppSettings.get()
-    ffprobe = app_cfg.ffprobe_path or settings.FFPROBE_PATH
+    ffprobe = app_cfg.resolved_ffprobe_path
 
     cmd = [
         ffprobe,
@@ -160,7 +160,7 @@ def run_conversion_job(job_id: str, cancel_check: Callable[[], bool]):
         output_path = safe_output_path(output_dir, f"{out_stem}.{out_ext}")
 
         app_cfg = AppSettings.get()
-        ffmpeg = app_cfg.ffmpeg_path or settings.FFMPEG_PATH
+        ffmpeg = app_cfg.resolved_ffmpeg_path
 
         cmd = _build_ffmpeg_cmd(ffmpeg, input_path, output_path, job)
         logger.info("FFmpeg command: %s", " ".join(str(c) for c in cmd))
