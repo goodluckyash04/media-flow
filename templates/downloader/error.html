@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} Error · {{ APP_NAME }}{% endblock %}
+{% block topbar_title %}Error{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height:60vh;text-align:center;">
+  <div style="font-size:6rem;opacity:0.15;line-height:1;margin-bottom:24px;">{{ code }}</div>
+  <h1 style="font-size:1.8rem;margin-bottom:8px;">{{ message }}</h1>
+  <p style="color:var(--text-muted);max-width:480px;margin-bottom:32px;">
+    {% if code == 404 %}
+      The page you're looking for doesn't exist. It may have been moved or the URL is incorrect.
+    {% elif code == 403 %}
+      You don't have permission to access this resource.
+    {% elif code == 400 %}
+      The request was invalid or malformed.
+    {% else %}
+      An unexpected error occurred. Please try again. If the problem persists, check the application logs.
+    {% endif %}
+  </p>
+  <div class="d-flex gap-3">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
+      <i class="bi bi-grid-1x2"></i> Go to Dashboard
+    </a>
+    <button onclick="history.back()" class="btn btn-secondary">
+      <i class="bi bi-arrow-left"></i> Go Back
+    </button>
+  </div>
+  {% if code == 500 %}
+  <div class="info-panel panel-warning mt-4" style="max-width:560px;text-align:left;font-size:0.82rem;">
+    <i class="bi bi-info-circle me-1"></i>
+    Check the application log at <code>data/logs/app.log</code> for details.
+    Run <code>manage.py check</code> to verify the Django configuration.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

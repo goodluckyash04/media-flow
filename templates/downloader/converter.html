@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% load downloader_tags %}
+{% block title %}Audio Converter · {{ APP_NAME }}{% endblock %}
+{% block meta_description %}Convert local video files to audio formats{% endblock %}
+{% block topbar_title %}Audio Converter{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Audio Converter</h1>
+  <p class="page-subtitle">Convert local video or audio files to your preferred audio format</p>
+</div>
+
+{% if not ffmpeg_ok %}
+<div class="info-panel panel-danger mb-4">
+  <div class="d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill" style="font-size:1.2rem;"></i>
+    <div>
+      <strong>FFmpeg not found</strong>
+      <div style="font-size:0.85rem;margin-top:4px;">
+        FFmpeg is required for audio conversion. Please install it and configure the path in
+        <a href="{% url 'settings' %}">Settings</a>.
+        On Windows: <a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener">download from ffmpeg.org</a> and add to PATH.
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if ffmpeg_ok %}
+<div class="info-panel panel-success mb-4 d-flex align-items-center gap-2" style="padding:10px 16px;">
+  <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
+  <span style="font-size:0.85rem;color:var(--text-secondary);">FFmpeg detected: <code>{{ ffmpeg_ver|truncatechars:60 }}</code></span>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Drop zone + file list -->
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-file-earmark-music text-accent"></i>
+        <h5 class="card-title">Input Files</h5>
+        <span id="fileCountBadge" class="ms-auto badge badge-running" style="display:none;"></span>
+      </div>
+      <div class="card-body">
+        <!-- Hidden file input -->
+        <input type="file" id="filePickerInput" multiple accept="video/*,audio/*,.mp4,.mkv,.avi,.mov,.webm,.flv,.mp3,.m4a,.flac,.wav,.opus,.ogg" style="display:none;">
+
+        <!-- Drop zone -->
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-zone-icon">🎬</div>
+          <div class="drop-zone-text">Drag &amp; drop video or audio files here</div>
+          <div class="drop-zone-hint">or click to select files</div>
+          <div class="mt-3">
+            <button type="button" class="btn btn-secondary btn-sm" id="browseBtn">
+              <i class="bi bi-folder2-open"></i> Browse Files
+            </button>
+          </div>
+        </div>
+
+        <!-- File list -->
+        <ul class="file-list mt-3" id="fileList" style="display:none;"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-sliders text-accent"></i>
+        <h5 class="card-title">Conversion Options</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'converter' %}" id="converterForm">
+          {% csrf_token %}
+          {{ form.input_files }}
+
+          <div class="mb-3">
+            <label class="form-label" for="id_conv_format">Output Format</label>
+            {{ form.output_format }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="id_conv_quality">Quality Preset</label>
+            {{ form.output_quality }}
+          </div>
+
+          <div id="formatNote" class="info-panel panel-accent mb-3" style="font-size:0.82rem;display:none;"></div>
+
+          <div class="mb-4">
+            <label class="form-label" for="id_conv_output_dir">Output Directory</label>
+            {{ form.output_dir }}
+            <div class="form-text">Leave blank to save alongside the source file</div>
+            {% if form.output_dir.errors %}
+            <div class="invalid-feedback d-block">{{ form.output_dir.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="info-panel mb-4" style="font-size:0.82rem;">
+            <i class="bi bi-shield-check me-1 text-success"></i>
+            <strong>Original files are never modified or deleted.</strong>
+            A new output file is always created.
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100" id="convertBtn" disabled>
+            <i class="bi bi-music-note-beamed"></i>
+            <span id="convertBtnText">Add files to convert</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const dropZone = document.getElementById('dropZone');
+  const filePickerInput = document.getElementById('filePickerInput');
+  const fileList = document.getElementById('fileList');
+  const convertBtn = document.getElementById('convertBtn');
+  const convertBtnText = document.getElementById('convertBtnText');
+  const fileCountBadge = document.getElementById('fileCountBadge');
+  const hiddenInput = document.getElementById('id_input_files');
+
+  let selectedFiles = [];
+
+  const AUDIO_FORMATS = {{ SUPPORTED_AUDIO_FORMATS|json }};
+  const QUALITY_PRESETS = JSON.parse('{{ quality_presets_json|escapejs }}');
+
+  function formatSize(bytes) {
+    if (!bytes) return '';
+    const units = ['B','KB','MB','GB'];
+    let i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+    return bytes.toFixed(1) + ' ' + units[i];
+  }
+
+  function renderFileList() {
+    if (selectedFiles.length === 0) {
+      fileList.style.display = 'none';
+      convertBtn.disabled = true;
+      convertBtnText.textContent = 'Add files to convert';
+      fileCountBadge.style.display = 'none';
+      hiddenInput.value = '';
+      return;
+    }
+
+    fileList.style.display = '';
+    fileList.innerHTML = '';
+    selectedFiles.forEach((f, i) => {
+      const li = document.createElement('li');
+      li.className = 'file-item';
+      li.innerHTML = `
+        <span class="file-item-icon"><i class="bi bi-file-earmark-play"></i></span>
+        <span class="file-item-name" title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</span>
+        <span class="file-item-size">${formatSize(f.size)}</span>
+        <span class="file-item-remove" data-index="${i}" title="Remove"><i class="bi bi-x-lg"></i></span>`;
+      li.querySelector('.file-item-remove').addEventListener('click', () => {
+        selectedFiles.splice(i, 1);
+        renderFileList();
+      });
+      fileList.appendChild(li);
+    });
+
+    convertBtn.disabled = false;
+    convertBtnText.textContent = `Convert ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`;
+    fileCountBadge.textContent = selectedFiles.length;
+    fileCountBadge.style.display = '';
+    hiddenInput.value = JSON.stringify(selectedFiles.map(f => f.path));
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function addFiles(fileObjs) {
+    // fileObjs: array of {name, path, size}
+    fileObjs.forEach(f => {
+      if (!selectedFiles.find(x => x.path === f.path)) {
+        selectedFiles.push(f);
+      }
+    });
+    renderFileList();
+  }
+
+  document.getElementById('browseBtn').addEventListener('click', () => filePickerInput.click());
+  dropZone.addEventListener('click', () => filePickerInput.click());
+
+  filePickerInput.addEventListener('change', () => {
+    // Note: browser File objects don't expose the real path in the web security model.
+    // For a local Django app, we use the file's name as the path reference.
+    // Users can also type paths directly in a text input on the converter page.
+    const files = Array.from(filePickerInput.files).map(f => ({
+      name: f.name,
+      path: f.name,  // Only the name is accessible in browser context
+      size: f.size,
+    }));
+    addFiles(files);
+    filePickerInput.value = '';
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragging');
+    const files = Array.from(e.dataTransfer.files).map(f => ({
+      name: f.name,
+      path: f.name,
+      size: f.size,
+    }));
+    addFiles(files);
+  });
+
+  // Format quality notes
+  const formatSelect = document.getElementById('id_conv_format');
+  const qualitySelect = document.getElementById('id_conv_quality');
+  const formatNote = document.getElementById('formatNote');
+
+  function updateFormatNote() {
+    const fmt = formatSelect.value;
+    const qual = qualitySelect.value;
+    const presets = QUALITY_PRESETS[fmt] || {};
+    const preset = presets[qual] || presets['best'] || {};
+    const label = preset.label || '';
+
+    const notes = {
+      flac: '⚠️ FLAC is lossless encoding. Transcoding from a lossy source (MP3, AAC) does NOT restore lost audio quality.',
+      wav: 'WAV produces uncompressed PCM audio. Files will be large.',
+      opus: 'Opus is excellent for streaming/storage. Broad player support on modern systems.',
+      mp3: 'MP3 is universally compatible. Quality preset: ' + label,
+      m4a: 'M4A/AAC offers good quality at smaller sizes. Quality preset: ' + label,
+    };
+
+    formatNote.style.display = '';
+    formatNote.innerHTML = `<i class="bi bi-info-circle me-1"></i>${notes[fmt] || label}`;
+
+    // Remove quality options for formats that don't support them
+    if (fmt === 'flac' || fmt === 'wav') {
+      qualitySelect.querySelectorAll('option').forEach(o => {
+        o.disabled = o.value !== 'best';
+      });
+      qualitySelect.value = 'best';
+    } else {
+      qualitySelect.querySelectorAll('option').forEach(o => o.disabled = false);
+    }
+  }
+
+  formatSelect.addEventListener('change', updateFormatNote);
+  qualitySelect.addEventListener('change', updateFormatNote);
+  updateFormatNote();
+})();
+</script>
+{% endblock %}

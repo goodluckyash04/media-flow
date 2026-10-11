@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}Queue · {{ APP_NAME }}{% endblock %}
+{% block meta_description %}Download and conversion job queue{% endblock %}
+{% block topbar_title %}Job Queue{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center">
+  <div>
+    <h1>Queue</h1>
+    <p class="page-subtitle">Active, completed, and failed jobs</p>
+  </div>
+  <div class="ms-auto d-flex gap-2">
+    <a href="{% url 'download' %}" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> New Download
+    </a>
+  </div>
+</div>
+
+<!-- Tab navigation -->
+<ul class="nav mb-4" role="tablist" style="border-bottom:1px solid var(--border-subtle);gap:4px;">
+  <li class="nav-item" role="presentation">
+    <button class="btn btn-secondary" style="border-radius:var(--radius-sm) var(--radius-sm) 0 0;border-bottom:2px solid var(--accent-primary);color:var(--accent-primary);"
+            id="tab-downloads" data-target="panel-downloads" onclick="switchTab(this, 'panel-downloads')">
+      <i class="bi bi-cloud-arrow-down me-1"></i>
+      Downloads
+      <span class="badge badge-running ms-1" id="dl-active-count" style="display:none;"></span>
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="btn btn-secondary" style="border-radius:var(--radius-sm) var(--radius-sm) 0 0;border-bottom:2px solid transparent;"
+            id="tab-conversions" data-target="panel-conversions" onclick="switchTab(this, 'panel-conversions')">
+      <i class="bi bi-music-note-beamed me-1"></i>
+      Conversions
+      <span class="badge badge-running ms-1" id="conv-active-count" style="display:none;"></span>
+    </button>
+  </li>
+</ul>
+
+<!-- Downloads panel -->
+<div id="panel-downloads">
+  <div class="card">
+    <div class="table-container">
+      <table id="downloadsTable">
+        <thead>
+          <tr>
+            <th>Title / URL</th>
+            <th>Type</th>
+            <th>Format</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Stage</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="downloadsTbody">
+          {% for job in downloads %}
+          <tr id="dl-row-{{ job.id }}" data-job-id="{{ job.id }}" data-status="{{ job.status }}">
+            <td style="max-width:280px;">
+              <div class="job-row-title">{{ job.title|default:job.url|truncatechars:55 }}</div>
+              {% if job.title and job.url %}
+              <div class="job-row-meta" style="word-break:break-all;">{{ job.url|truncatechars:45 }}</div>
+              {% endif %}
+            </td>
+            <td style="font-size:0.8rem;color:var(--text-muted);">{{ job.get_job_type_display }}</td>
+            <td style="font-size:0.8rem;">{{ job.output_format|upper }}</td>
+            <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
+            <td style="min-width:120px;" class="job-progress-cell">
+              {% if job.is_active %}
+              <div class="progress"><div class="progress-bar{% if job.status == 'running' %} progress-bar-animated progress-bar-striped{% endif %}"
+                   style="width:{{ job.progress_pct }}%"></div></div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">
+                {{ job.progress_pct|floatformat:0 }}%
+                {% if job.speed %} · {{ job.speed }}{% endif %}
+                {% if job.eta %} · ETA {{ job.eta }}{% endif %}
+              </div>
+              {% elif job.status == 'completed' %}
+              <div class="progress"><div class="progress-bar bg-success" style="width:100%"></div></div>
+              <div style="font-size:0.72rem;color:var(--success);margin-top:2px;">100%</div>
+              {% else %}
+              <span class="text-muted" style="font-size:0.8rem;">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:0.78rem;color:var(--text-muted);max-width:160px;">
+              <span class="job-stage">{{ job.stage|default:"" }}</span>
+            </td>
+            <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;">
+              {{ job.created_at|date:"M d, H:i" }}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                {% if job.status == 'queued' or job.status == 'running' %}
+                <button class="btn btn-secondary btn-sm btn-cancel"
+                        data-job-id="{{ job.id }}" data-job-type="download"
+                        title="Cancel"><i class="bi bi-x-lg"></i></button>
+                {% endif %}
+                {% if job.status == 'failed' or job.status == 'cancelled' %}
+                <button class="btn btn-secondary btn-sm btn-retry"
+                        data-job-id="{{ job.id }}" data-job-type="download"
+                        title="Retry"><i class="bi bi-arrow-repeat"></i></button>
+                {% endif %}
+                {% if job.output_path %}
+                <button class="btn btn-secondary btn-sm btn-open-folder"
+                        data-job-id="{{ job.id }}" title="Open folder">
+                  <i class="bi bi-folder2-open"></i></button>
+                {% endif %}
+                {% if job.error_message %}
+                <button class="btn btn-secondary btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#errorModal"
+                        data-error="{{ job.error_message|escapejs }}"
+                        data-title="{{ job.title|default:'Error Details'|escapejs }}"
+                        title="View error"><i class="bi bi-exclamation-circle"></i></button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted);">
+            No download jobs yet. <a href="{% url 'download' %}">Start a download</a>
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Conversions panel -->
+<div id="panel-conversions" style="display:none;">
+  <div class="card">
+    <div class="table-container">
+      <table id="conversionsTable">
+        <thead>
+          <tr>
+            <th>Input File</th>
+            <th>Format</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Stage</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="conversionsTbody">
+          {% for job in conversions %}
+          <tr id="conv-row-{{ job.id }}" data-job-id="{{ job.id }}" data-status="{{ job.status }}">
+            <td style="max-width:280px;">
+              <div class="job-row-title">{{ job.input_filename|truncatechars:55 }}</div>
+            </td>
+            <td style="font-size:0.8rem;">{{ job.output_format|upper }}</td>
+            <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
+            <td style="min-width:120px;" class="job-progress-cell">
+              {% if job.is_active %}
+              <div class="progress"><div class="progress-bar{% if job.status == 'running' %} progress-bar-animated progress-bar-striped{% endif %}"
+                   style="width:{{ job.progress_pct }}%"></div></div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">{{ job.progress_pct|floatformat:0 }}%</div>
+              {% elif job.status == 'completed' %}
+              <div class="progress"><div class="progress-bar bg-success" style="width:100%"></div></div>
+              <div style="font-size:0.72rem;color:var(--success);margin-top:2px;">100%</div>
+              {% else %}
+              <span class="text-muted" style="font-size:0.8rem;">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:0.78rem;color:var(--text-muted);">{{ job.stage|default:"" }}</td>
+            <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;">{{ job.created_at|date:"M d, H:i" }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                {% if job.status == 'queued' or job.status == 'running' %}
+                <button class="btn btn-secondary btn-sm btn-cancel"
+                        data-job-id="{{ job.id }}" data-job-type="conversion"
+                        title="Cancel"><i class="bi bi-x-lg"></i></button>
+                {% endif %}
+                {% if job.status == 'failed' or job.status == 'cancelled' %}
+                <button class="btn btn-secondary btn-sm btn-retry"
+                        data-job-id="{{ job.id }}" data-job-type="conversion"
+                        title="Retry"><i class="bi bi-arrow-repeat"></i></button>
+                {% endif %}
+                {% if job.output_path %}
+                <button class="btn btn-secondary btn-sm btn-open-folder"
+                        data-job-id="{{ job.id }}" title="Open folder">
+                  <i class="bi bi-folder2-open"></i></button>
+                {% endif %}
+                {% if job.error_message %}
+                <button class="btn btn-secondary btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#errorModal"
+                        data-error="{{ job.error_message|escapejs }}"
+                        data-title="{{ job.input_filename|default:'Error Details'|escapejs }}"
+                        title="View error"><i class="bi bi-exclamation-circle"></i></button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center py-5" style="color:var(--text-muted);">
+            No conversion jobs yet. <a href="{% url 'converter' %}">Convert a file</a>
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Error detail modal -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="errorModalLabel">Error Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="errorModalBody" style="background:var(--bg-elevated);padding:16px;border-radius:var(--radius-sm);font-size:0.82rem;color:var(--danger);white-space:pre-wrap;word-break:break-word;max-height:400px;overflow-y:auto;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function switchTab(btn, panelId) {
+  document.querySelectorAll('[data-target]').forEach(b => {
+    b.style.borderBottomColor = 'transparent';
+    b.style.color = '';
+  });
+  btn.style.borderBottomColor = 'var(--accent-primary)';
+  btn.style.color = 'var(--accent-primary)';
+
+  document.querySelectorAll('#panel-downloads, #panel-conversions').forEach(p => p.style.display = 'none');
+  document.getElementById(panelId).style.display = '';
+}
+
+// Error modal
+document.getElementById('errorModal').addEventListener('show.bs.modal', e => {
+  const btn = e.relatedTarget;
+  document.getElementById('errorModalLabel').textContent = btn.dataset.title || 'Error Details';
+  document.getElementById('errorModalBody').textContent = btn.dataset.error || 'No error details.';
+});
+
+// Action buttons
+document.addEventListener('click', async e => {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ?
+    document.querySelector('[name=csrfmiddlewaretoken]').value :
+    window.MF.getCsrf();
+
+  if (e.target.closest('.btn-cancel')) {
+    const btn = e.target.closest('.btn-cancel');
+    const { jobId, jobType } = btn.dataset;
+    if (!confirm('Cancel this job?')) return;
+    const url = jobType === 'conversion' ?
+      `/api/cancel/conversion/${jobId}/` : `/api/cancel/download/${jobId}/`;
+    const r = await fetch(url, {method:'POST', headers:{'X-CSRFToken': csrfToken}});
+    const d = await r.json();
+    if (d.ok) { window.MF.toast('Job cancelled.', 'success'); setTimeout(() => location.reload(), 1000); }
+    else window.MF.toast(d.error, 'error');
+  }
+
+  if (e.target.closest('.btn-retry')) {
+    const btn = e.target.closest('.btn-retry');
+    const { jobId, jobType } = btn.dataset;
+    const url = jobType === 'conversion' ?
+      `/api/retry/conversion/${jobId}/` : `/api/retry/download/${jobId}/`;
+    const r = await fetch(url, {method:'POST', headers:{'X-CSRFToken': csrfToken}});
+    const d = await r.json();
+    if (d.ok) { window.MF.toast('Job requeued.', 'success'); setTimeout(() => location.reload(), 1000); }
+    else window.MF.toast(d.error, 'error');
+  }
+
+  if (e.target.closest('.btn-open-folder')) {
+    const btn = e.target.closest('.btn-open-folder');
+    const r = await fetch(`/api/open-folder/${btn.dataset.jobId}/`);
+    const d = await r.json();
+    if (!d.ok) window.MF.toast(d.error, 'error');
+  }
+});
+
+// Live progress polling
+(function() {
+  const POLL_MS = {{ POLL_INTERVAL_MS }};
+  const csrfToken = window.MF ? window.MF.getCsrf() : '';
+
+  function updateDownloadRow(job) {
+    const row = document.getElementById(`dl-row-${job.id}`);
+    if (!row) return;
+    const cell = row.querySelector('.job-progress-cell');
+    if (!cell) return;
+
+    const pct = Math.round(job.progress_pct || 0);
+    if (job.status === 'running' || job.status === 'queued') {
+      cell.innerHTML = `
+        <div class="progress"><div class="progress-bar${job.status==='running'?' progress-bar-animated progress-bar-striped':''}"
+             style="width:${pct}%"></div></div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">
+          ${pct}%${job.speed ? ' · ' + job.speed : ''}${job.eta ? ' · ETA ' + job.eta : ''}
+        </div>`;
+    }
+
+    const stageEl = row.querySelector('.job-stage');
+    if (stageEl) stageEl.textContent = job.stage || '';
+  }
+
+  setInterval(async () => {
+    try {
+      const r = await fetch('{% url "queue_status" %}');
+      const data = await r.json();
+      if (!data.ok) return;
+
+      const dlCount = data.downloads.length;
+      const convCount = data.conversions.length;
+
+      const dlBadge = document.getElementById('dl-active-count');
+      dlBadge.textContent = dlCount;
+      dlBadge.style.display = dlCount > 0 ? '' : 'none';
+
+      const convBadge = document.getElementById('conv-active-count');
+      convBadge.textContent = convCount;
+      convBadge.style.display = convCount > 0 ? '' : 'none';
+
+      data.downloads.forEach(updateDownloadRow);
+
+      // Update sidebar
+      const sidebarBadge = document.getElementById('sidebar-active-count');
+      if (sidebarBadge) {
+        const total = dlCount + convCount;
+        sidebarBadge.textContent = total;
+        sidebarBadge.style.display = total > 0 ? '' : 'none';
+      }
+    } catch(e) {}
+  }, POLL_MS);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}Library · {{ APP_NAME }}{% endblock %}
+{% block meta_description %}Media library and download history{% endblock %}
+{% block topbar_title %}Media Library{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center">
+  <div>
+    <h1>Media Library</h1>
+    <p class="page-subtitle">Search and manage your download history</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'library' %}" class="d-flex gap-3 flex-wrap align-items-end">
+      <div>
+        <label class="form-label">Type</label>
+        <div class="d-flex gap-2">
+          <a href="?type=download{% if q %}&q={{ q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+             class="btn btn-sm {% if job_type == 'download' %}btn-primary{% else %}btn-secondary{% endif %}">Downloads</a>
+          <a href="?type=conversion{% if q %}&q={{ q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+             class="btn btn-sm {% if job_type == 'conversion' %}btn-primary{% else %}btn-secondary{% endif %}">Conversions</a>
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <label class="form-label">Search</label>
+        <input type="hidden" name="type" value="{{ job_type }}">
+        <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="Search title, URL, filename…">
+      </div>
+      <div>
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status" style="min-width:130px;">
+          <option value="">All statuses</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-search"></i> Search
+        </button>
+        <a href="?type={{ job_type }}" class="btn btn-secondary ms-2">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card">
+  <div class="card-header d-flex align-items-center">
+    <i class="bi bi-archive text-accent"></i>
+    <h5 class="card-title ms-2">
+      {% if job_type == 'conversion' %}Conversions{% else %}Downloads{% endif %}
+    </h5>
+    <span class="ms-2 text-muted" style="font-size:0.82rem;">{{ jobs|length }} record{{ jobs|length|pluralize }}</span>
+  </div>
+  <div class="table-container">
+    {% if job_type == 'download' %}
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Source</th>
+          <th>Format</th>
+          <th>Status</th>
+          <th>Output</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr id="lib-row-{{ job.id }}">
+          <td style="max-width:250px;">
+            <div class="job-row-title">{{ job.title|default:"Untitled"|truncatechars:50 }}</div>
+            {% if job.uploader %}<div class="job-row-meta">{{ job.uploader }}</div>{% endif %}
+          </td>
+          <td style="max-width:200px;">
+            {% if job.url %}
+            <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer"
+               style="font-size:0.78rem;color:var(--text-muted);word-break:break-all;" title="{{ job.url }}">
+              {{ job.url|truncatechars:35 }}
+            </a>
+            {% endif %}
+          </td>
+          <td style="font-size:0.82rem;">{{ job.output_format|upper }}</td>
+          <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
+          <td style="max-width:180px;">
+            {% if job.output_filename %}
+            <span title="{{ job.output_path }}" style="font-size:0.78rem;color:var(--text-secondary);">
+              {{ job.output_filename|truncatechars:30 }}
+            </span>
+            {% else %}
+            <span class="text-muted" style="font-size:0.78rem;">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;">{{ job.created_at|date:"M d, Y H:i" }}</td>
+          <td>
+            <div class="d-flex gap-1">
+              {% if job.output_path %}
+              <button class="btn btn-secondary btn-sm btn-open-folder"
+                      data-job-id="{{ job.id }}" title="Open folder">
+                <i class="bi bi-folder2-open"></i>
+              </button>
+              {% endif %}
+              <button class="btn btn-secondary btn-sm btn-delete-record"
+                      data-job-id="{{ job.id }}"
+                      data-has-file="{{ job.output_path|yesno:'true,false' }}"
+                      title="Delete record">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center py-5" style="color:var(--text-muted);">
+          No records found.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% else %}
+    <!-- Conversions table -->
+    <table>
+      <thead>
+        <tr>
+          <th>Input File</th>
+          <th>Format</th>
+          <th>Status</th>
+          <th>Output</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr id="lib-row-{{ job.id }}">
+          <td style="max-width:250px;">
+            <div class="job-row-title">{{ job.input_filename|truncatechars:50 }}</div>
+          </td>
+          <td style="font-size:0.82rem;">{{ job.output_format|upper }}</td>
+          <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
+          <td style="max-width:200px;">
+            {% if job.output_filename %}
+            <span style="font-size:0.78rem;color:var(--text-secondary);">{{ job.output_filename|truncatechars:35 }}</span>
+            {% else %}
+            <span class="text-muted" style="font-size:0.78rem;">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;">{{ job.created_at|date:"M d, Y H:i" }}</td>
+          <td>
+            <div class="d-flex gap-1">
+              {% if job.output_path %}
+              <button class="btn btn-secondary btn-sm btn-open-folder"
+                      data-job-id="{{ job.id }}" title="Open folder">
+                <i class="bi bi-folder2-open"></i>
+              </button>
+              {% endif %}
+              <button class="btn btn-secondary btn-sm btn-delete-record"
+                      data-job-id="{{ job.id }}"
+                      data-has-file="{{ job.output_path|yesno:'true,false' }}"
+                      title="Delete record">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center py-5" style="color:var(--text-muted);">
+          No records found.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalLabel">Delete Record</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Remove this history record?</p>
+        <div class="form-check" id="deleteFileCheckDiv">
+          <input class="form-check-input" type="checkbox" id="deleteFileCheck">
+          <label class="form-check-label" for="deleteFileCheck" style="color:var(--danger);">
+            Also delete the output file from disk
+          </label>
+        </div>
+        <div class="info-panel panel-danger mt-3" id="deleteFileWarning" style="display:none;font-size:0.82rem;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          This will permanently delete the output file. This cannot be undone.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteBtn">Delete Record</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const csrfToken = window.MF.getCsrf();
+  let deleteJobId = null;
+
+  document.getElementById('deleteFileCheck').addEventListener('change', function() {
+    document.getElementById('deleteFileWarning').style.display = this.checked ? '' : 'none';
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('.btn-open-folder')) {
+      const btn = e.target.closest('.btn-open-folder');
+      fetch(`/api/open-folder/${btn.dataset.jobId}/`).then(r => r.json()).then(d => {
+        if (!d.ok) window.MF.toast(d.error, 'error');
+      });
+    }
+
+    if (e.target.closest('.btn-delete-record')) {
+      const btn = e.target.closest('.btn-delete-record');
+      deleteJobId = btn.dataset.jobId;
+      const hasFile = btn.dataset.hasFile === 'true';
+      const checkDiv = document.getElementById('deleteFileCheckDiv');
+      checkDiv.style.display = hasFile ? '' : 'none';
+      document.getElementById('deleteFileCheck').checked = false;
+      document.getElementById('deleteFileWarning').style.display = 'none';
+      new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    }
+  });
+
+  document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+    if (!deleteJobId) return;
+    const deleteFile = document.getElementById('deleteFileCheck').checked;
+    const r = await fetch(`/api/delete/${deleteJobId}/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+      body: JSON.stringify({delete_file: deleteFile}),
+    });
+    const d = await r.json();
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    if (d.ok) {
+      const row = document.getElementById(`lib-row-${deleteJobId}`);
+      if (row) row.remove();
+      window.MF.toast('Record deleted.', 'success');
+    } else {
+      window.MF.toast(d.error, 'error');
+    }
+    deleteJobId = null;
+  });
+})();
+</script>
+{% endblock %}

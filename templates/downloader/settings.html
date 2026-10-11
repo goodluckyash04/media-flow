@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ APP_NAME }}{% endblock %}
+{% block meta_description %}Application settings and configuration{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Settings</h1>
+  <p class="page-subtitle">Configure download behavior, audio defaults, and external tools</p>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Settings form -->
+  <div class="col-12 col-lg-8">
+    <form method="post" action="{% url 'settings' %}" id="settingsForm">
+      {% csrf_token %}
+
+      <!-- Download settings -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-folder2 text-accent"></i>
+          <h5 class="card-title">Download Settings</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label" for="id_settings_download_dir">Default Download Directory</label>
+            {{ form.download_dir }}
+            {% if form.download_dir.errors %}
+            <div class="invalid-feedback d-block">{{ form.download_dir.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_filename_template">Filename Template</label>
+            {{ form.filename_template }}
+            {% if form.filename_template.errors %}
+            <div class="invalid-feedback d-block">{{ form.filename_template.errors.0 }}</div>
+            {% endif %}
+            <div class="form-text">
+              Available variables: <code>%(title)s</code> <code>%(uploader)s</code> <code>%(id)s</code>
+              <code>%(ext)s</code> <code>%(upload_date)s</code>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_max_concurrent">Max Concurrent Jobs</label>
+            {{ form.max_concurrent_jobs }}
+            {% if form.max_concurrent_jobs.errors %}
+            <div class="invalid-feedback d-block">{{ form.max_concurrent_jobs.errors.0 }}</div>
+            {% endif %}
+            <div class="form-text">Requires restart to take effect. Recommended: 1–5.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audio defaults -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-music-note-beamed text-accent"></i>
+          <h5 class="card-title">Audio Defaults</h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label" for="id_default_format">Default Format</label>
+              {{ form.default_audio_format }}
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="id_default_quality">Default Quality</label>
+              {{ form.default_audio_quality }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Appearance -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-palette text-accent"></i>
+          <h5 class="card-title">Appearance</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label" for="id_theme">Theme</label>
+            {{ form.theme }}
+          </div>
+        </div>
+      </div>
+
+      <!-- External tools -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-tools text-accent"></i>
+          <h5 class="card-title">External Tools</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label" for="id_ffmpeg_path">FFmpeg Path</label>
+            {{ form.ffmpeg_path }}
+            <div class="form-text">Full path to ffmpeg executable, or just <code>ffmpeg</code> if it's in PATH</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_ffprobe_path">FFprobe Path</label>
+            {{ form.ffprobe_path }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Spotify -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-spotify text-accent"></i>
+          <h5 class="card-title">Spotify Integration <span class="text-muted" style="font-size:0.75rem;font-weight:400;">(Optional)</span></h5>
+        </div>
+        <div class="card-body">
+          <div class="info-panel panel-accent mb-3" style="font-size:0.82rem;">
+            <i class="bi bi-info-circle me-1"></i>
+            Spotify integration retrieves metadata only. It does not download or stream Spotify audio.
+            Requires a <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer</a> account.
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_spotify_client_id">Spotify Client ID</label>
+            {{ form.spotify_client_id }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_spotify_secret">Spotify Client Secret</label>
+            {{ form.spotify_client_secret }}
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-floppy"></i> Save Settings
+      </button>
+    </form>
+  </div>
+
+  <!-- Right: System info -->
+  <div class="col-12 col-lg-4">
+    <!-- System status -->
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-cpu text-accent"></i>
+        <h5 class="card-title">System Status</h5>
+      </div>
+      <div class="card-body" style="font-size:0.88rem;">
+        <!-- FFmpeg -->
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div style="width:10px;height:10px;border-radius:50%;background:{% if ffmpeg_ok %}var(--success){% else %}var(--danger){% endif %};flex-shrink:0;"></div>
+          <div>
+            <strong style="color:var(--text-primary);">FFmpeg</strong>
+            <div style="font-size:0.78rem;color:var(--text-muted);">
+              {% if ffmpeg_ok %}{{ ffmpeg_ver|truncatechars:50 }}{% else %}Not found{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- FFprobe -->
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div style="width:10px;height:10px;border-radius:50%;background:{% if ffprobe_ok %}var(--success){% else %}var(--danger){% endif %};flex-shrink:0;"></div>
+          <div>
+            <strong style="color:var(--text-primary);">FFprobe</strong>
+            <div style="font-size:0.78rem;color:var(--text-muted);">
+              {% if ffprobe_ok %}{{ ffprobe_ver|truncatechars:50 }}{% else %}Not found{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- yt-dlp -->
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div style="width:10px;height:10px;border-radius:50%;background:var(--success);flex-shrink:0;"></div>
+          <div>
+            <strong style="color:var(--text-primary);">yt-dlp</strong>
+            <div style="font-size:0.78rem;color:var(--text-muted);">v{{ ytdlp_ver }}</div>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border-subtle);">
+
+        <button class="btn btn-secondary btn-sm w-100" id="updateYtdlpBtn">
+          <i class="bi bi-arrow-repeat"></i> Update yt-dlp
+        </button>
+        <div id="updateOutput" class="mt-2" style="display:none;">
+          <pre style="font-size:0.75rem;background:var(--bg-elevated);padding:10px;border-radius:6px;color:var(--text-secondary);max-height:120px;overflow-y:auto;white-space:pre-wrap;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Installation guide -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-book text-accent"></i>
+        <h5 class="card-title">FFmpeg Installation</h5>
+      </div>
+      <div class="card-body" style="font-size:0.82rem;">
+        <p style="color:var(--text-secondary);">FFmpeg is required for audio extraction and conversion.</p>
+        <strong style="color:var(--text-primary);">Windows</strong>
+        <ol style="color:var(--text-secondary);padding-left:18px;margin-top:6px;">
+          <li>Download from <a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener">ffmpeg.org</a></li>
+          <li>Extract the archive</li>
+          <li>Add the <code>bin</code> folder to your PATH</li>
+          <li>Or enter the full path to <code>ffmpeg.exe</code> above</li>
+        </ol>
+        <p style="color:var(--text-secondary);margin-top:8px;">Alternatively, use <strong>winget</strong>:</p>
+        <code style="display:block;background:var(--bg-elevated);padding:8px 12px;border-radius:6px;font-size:0.78rem;">winget install Gyan.FFmpeg</code>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('updateYtdlpBtn').addEventListener('click', async function() {
+  const btn = this;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Updating…';
+
+  const csrfToken = window.MF.getCsrf();
+  try {
+    const r = await fetch('{% url "update_ytdlp" %}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken},
+    });
+    const d = await r.json();
+    const outDiv = document.getElementById('updateOutput');
+    outDiv.style.display = '';
+    outDiv.querySelector('pre').textContent = d.ok ? d.output : d.error;
+    window.MF.toast(d.ok ? 'yt-dlp updated.' : 'Update failed.', d.ok ? 'success' : 'error');
+  } catch(e) {
+    window.MF.toast('Network error.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Update yt-dlp';
+  }
+});
+
+// Theme preview toggle
+document.getElementById('id_theme').addEventListener('change', function() {
+  document.documentElement.setAttribute('data-theme', this.value);
+});
+</script>
+{% endblock %}

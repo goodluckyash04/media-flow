@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Playlist Download · {{ APP_NAME }}{% endblock %}
+{% block meta_description %}Download entire playlists with track selection{% endblock %}
+{% block topbar_title %}Playlist Download{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Playlist Download</h1>
+  <p class="page-subtitle">Inspect a playlist URL, select tracks, and batch download</p>
+</div>
+
+<div class="row g-4">
+  <!-- Left: URL form -->
+  <div class="col-12 col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-collection-play text-accent"></i>
+        <h5 class="card-title">Playlist URL</h5>
+      </div>
+      <div class="card-body">
+        <form id="playlistInspectForm">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" for="id_pl_url">Playlist URL</label>
+            {{ form.url }}
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label" for="id_pl_format">Format</label>
+              {{ form.output_format }}
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="id_pl_quality">Quality</label>
+              {{ form.output_quality }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_pl_output_dir">Output Directory</label>
+            {{ form.output_dir }}
+            <div class="form-text">A subfolder named after the playlist will be created</div>
+          </div>
+          <button type="button" class="btn btn-secondary" id="inspectPlaylistBtn">
+            <i class="bi bi-search"></i> Inspect Playlist
+          </button>
+          <span id="playlistSpinner" class="ms-2" style="display:none;">
+            <span class="spinner-border spinner-border-sm text-accent"></span>
+            <span class="ms-1 text-muted" style="font-size:0.85rem;">Loading…</span>
+          </span>
+        </form>
+      </div>
+    </div>
+
+    <!-- Playlist meta -->
+    <div id="playlistMeta" class="card" style="display:none;">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <img id="plThumb" src="" alt="" style="width:56px;height:56px;border-radius:8px;object-fit:cover;background:var(--bg-elevated);">
+          <div>
+            <div id="plTitle" style="font-weight:600;color:var(--text-primary);"></div>
+            <div id="plUploader" style="font-size:0.8rem;color:var(--text-muted);"></div>
+          </div>
+        </div>
+        <div id="plCount" style="font-size:0.82rem;color:var(--text-secondary);"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Track list -->
+  <div class="col-12 col-lg-7">
+    <div class="card h-100" id="trackListCard">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-music-note-list text-accent"></i>
+        <h5 class="card-title">Tracks</h5>
+        <div class="ms-auto d-flex gap-2" id="trackControls" style="display:none!important;">
+          <button class="btn btn-secondary btn-sm" id="selectAllBtn">Select All</button>
+          <button class="btn btn-secondary btn-sm" id="deselectAllBtn">Deselect All</button>
+          <span class="text-muted" style="font-size:0.82rem;align-self:center;" id="selectionCount"></span>
+        </div>
+      </div>
+      <div class="card-body" id="trackListBody">
+        <div class="text-center py-5" id="trackListPlaceholder">
+          <div style="font-size:3rem;opacity:0.2;margin-bottom:12px;">🎵</div>
+          <p style="color:var(--text-muted);font-size:0.88rem;">Inspect a playlist URL to see available tracks</p>
+        </div>
+        <div class="track-grid" id="trackGrid" style="display:none;"></div>
+      </div>
+      <div class="card-footer d-flex justify-content-between align-items-center" id="trackListFooter" style="display:none!important;">
+        <span class="text-muted" style="font-size:0.85rem;" id="downloadSummary"></span>
+        <button class="btn btn-primary" id="startPlaylistBtn" disabled>
+          <i class="bi bi-download"></i> Download Selected
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  let playlistEntries = [];
+  let selectedIndices = new Set();
+
+  function showSpinner(show) {
+    document.getElementById('playlistSpinner').style.display = show ? '' : 'none';
+    document.getElementById('inspectPlaylistBtn').disabled = show;
+  }
+
+  function formatDuration(secs) {
+    if (!secs) return '';
+    const m = Math.floor(secs / 60), s = secs % 60;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function renderTrackGrid() {
+    const grid = document.getElementById('trackGrid');
+    grid.innerHTML = '';
+    playlistEntries.forEach(entry => {
+      const sel = selectedIndices.has(entry.index);
+      const div = document.createElement('div');
+      div.className = 'track-item' + (sel ? ' selected' : '');
+      div.dataset.index = entry.index;
+      div.innerHTML = `
+        <div class="form-check mb-0">
+          <input class="form-check-input track-check" type="checkbox" ${sel ? 'checked' : ''}
+                 data-index="${entry.index}" id="track-${entry.index}" style="cursor:pointer;">
+        </div>
+        <img class="track-thumb" src="${entry.thumbnail || ''}" alt=""
+             onerror="this.style.display='none'">
+        <div class="track-info">
+          <div class="track-title">${escapeHtml(entry.title || 'Track ' + entry.index)}</div>
+          <div class="track-meta">${entry.uploader ? escapeHtml(entry.uploader) : ''}</div>
+        </div>
+        <div class="track-duration">${formatDuration(entry.duration)}</div>`;
+
+      div.addEventListener('click', (e) => {
+        if (e.target.classList.contains('form-check-input')) return;
+        const chk = div.querySelector('.track-check');
+        chk.checked = !chk.checked;
+        chk.dispatchEvent(new Event('change'));
+      });
+
+      div.querySelector('.track-check').addEventListener('change', (e) => {
+        const idx = parseInt(e.target.dataset.index);
+        if (e.target.checked) selectedIndices.add(idx);
+        else selectedIndices.delete(idx);
+        div.classList.toggle('selected', e.target.checked);
+        updateCounts();
+      });
+
+      grid.appendChild(div);
+    });
+
+    document.getElementById('trackListPlaceholder').style.display = 'none';
+    grid.style.display = '';
+    document.getElementById('trackControls').style.display = '';
+    document.getElementById('trackListFooter').style.display = '';
+    updateCounts();
+  }
+
+  function updateCounts() {
+    const total = playlistEntries.length;
+    const sel = selectedIndices.size;
+    document.getElementById('selectionCount').textContent = `${sel}/${total} selected`;
+    document.getElementById('downloadSummary').textContent = `${sel} track${sel !== 1 ? 's' : ''} will be downloaded`;
+    document.getElementById('startPlaylistBtn').disabled = sel === 0;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('inspectPlaylistBtn').addEventListener('click', async () => {
+    const url = document.getElementById('id_pl_url').value.trim();
+    if (!url) { window.MF.toast('Please enter a playlist URL.', 'warning'); return; }
+    showSpinner(true);
+    try {
+      const form = document.getElementById('playlistInspectForm');
+      const fd = new FormData(form);
+      fd.set('action', 'inspect');
+      const r = await fetch('{% url "playlist" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken},
+        body: fd,
+      });
+      const data = await r.json();
+      if (!data.ok) { window.MF.toast(data.error || 'Failed to load playlist.', 'error'); return; }
+
+      const info = data.info;
+      playlistEntries = info.entries || [];
+      selectedIndices = new Set(playlistEntries.map(e => e.index));
+
+      document.getElementById('plTitle').textContent = info.title || 'Playlist';
+      document.getElementById('plUploader').textContent = info.uploader || '';
+      document.getElementById('plCount').textContent = `${info.entry_count} tracks`;
+      if (info.thumbnail) {
+        document.getElementById('plThumb').src = info.thumbnail;
+        document.getElementById('plThumb').style.display = '';
+      }
+      document.getElementById('playlistMeta').style.display = '';
+      renderTrackGrid();
+    } catch(e) {
+      window.MF.toast('Network error. Check console.', 'error');
+      console.error(e);
+    } finally {
+      showSpinner(false);
+    }
+  });
+
+  document.getElementById('selectAllBtn').addEventListener('click', () => {
+    selectedIndices = new Set(playlistEntries.map(e => e.index));
+    document.querySelectorAll('.track-check').forEach(c => {
+      c.checked = true;
+      c.closest('.track-item').classList.add('selected');
+    });
+    updateCounts();
+  });
+
+  document.getElementById('deselectAllBtn').addEventListener('click', () => {
+    selectedIndices.clear();
+    document.querySelectorAll('.track-check').forEach(c => {
+      c.checked = false;
+      c.closest('.track-item').classList.remove('selected');
+    });
+    updateCounts();
+  });
+
+  document.getElementById('startPlaylistBtn').addEventListener('click', async () => {
+    if (selectedIndices.size === 0) return;
+    const btn = document.getElementById('startPlaylistBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Queuing…';
+
+    const url = document.getElementById('id_pl_url').value.trim();
+    const fmt = document.getElementById('id_pl_format').value;
+    const qual = document.getElementById('id_pl_quality').value;
+    const outDir = document.getElementById('id_pl_output_dir').value;
+    const plTitle = document.getElementById('plTitle').textContent;
+
+    try {
+      const r = await fetch('{% url "playlist" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({
+          action: 'download',
+          url,
+          playlist_title: plTitle,
+          selected_indices: [...selectedIndices],
+          entries: playlistEntries,
+          output_format: fmt,
+          output_quality: qual,
+          output_dir: outDir,
+        }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.href = '{% url "queue" %}';
+      } else {
+        window.MF.toast(data.error || 'Failed to queue playlist.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> Download Selected';
+      }
+    } catch(e) {
+      window.MF.toast('Network error.', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-download"></i> Download Selected';
+    }
+  });
+})();
+</script>
+{% endblock %}

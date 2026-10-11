@@ -1,0 +1,61 @@
+{% comment %}
+Partial: job_row.html
+Usage: {% include "partials/job_row.html" with job=job show_actions=True %}
+{% endcomment %}
+<tr id="job-row-{{ job.id }}" class="job-row" data-job-id="{{ job.id }}">
+  <td>
+    <div class="job-row-title">{{ job.title|default:job.url|truncatechars:60 }}</div>
+    {% if job.uploader %}
+    <div class="job-row-meta"><i class="bi bi-person me-1"></i>{{ job.uploader }}</div>
+    {% endif %}
+  </td>
+  <td>
+    <span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span>
+  </td>
+  <td>
+    {% if job.is_active %}
+    <div class="progress" style="min-width:80px;">
+      <div class="progress-bar{% if job.status == 'running' %} progress-bar-animated progress-bar-striped{% endif %}"
+           role="progressbar"
+           style="width:{{ job.progress_pct }}%"
+           aria-valuenow="{{ job.progress_pct }}"
+           aria-valuemin="0" aria-valuemax="100">
+      </div>
+    </div>
+    <div class="job-row-meta mt-1">{{ job.progress_pct|floatformat:0 }}%{% if job.eta %} · ETA {{ job.eta }}{% endif %}</div>
+    {% else %}
+    <span class="text-muted">—</span>
+    {% endif %}
+  </td>
+  <td class="text-muted" style="font-size:0.8rem;">
+    {{ job.created_at|date:"M d, H:i" }}
+  </td>
+  {% if show_actions %}
+  <td>
+    <div class="job-row-actions">
+      {% if job.status in 'queued,running' %}
+      <button class="btn btn-secondary btn-sm btn-cancel-job"
+              data-job-id="{{ job.id }}"
+              data-job-type="download"
+              title="Cancel">
+        <i class="bi bi-x-lg"></i>
+      </button>
+      {% elif job.status in 'failed,cancelled' %}
+      <button class="btn btn-secondary btn-sm btn-retry-job"
+              data-job-id="{{ job.id }}"
+              data-job-type="download"
+              title="Retry">
+        <i class="bi bi-arrow-repeat"></i>
+      </button>
+      {% endif %}
+      {% if job.output_path %}
+      <button class="btn btn-secondary btn-sm btn-open-folder"
+              data-job-id="{{ job.id }}"
+              title="Open folder">
+        <i class="bi bi-folder2-open"></i>
+      </button>
+      {% endif %}
+    </div>
+  </td>
+  {% endif %}
+</tr>
