@@ -113,6 +113,14 @@ def validate_url(url: str) -> str:
     return url
 
 
+def is_playlist_url(url: str) -> bool:
+    """Return True if the URL represents a playlist, album, or track collection."""
+    if not url:
+        return False
+    lower = url.lower()
+    return "list=" in lower or "/playlist" in lower or "/sets/" in lower or "/album/" in lower
+
+
 def validate_output_dir(path_str: str) -> Path:
     """
     Validate that a given path string is acceptable as an output directory.
@@ -161,10 +169,26 @@ def validate_audio_format(fmt: str) -> str:
 
 
 def validate_audio_quality(quality: str, fmt: str) -> str:
+    # Validate incompatible combination: Original format with lossy re-encoding preset
+    if fmt == "original" and quality not in ("original", "best"):
+        raise ValidationError(
+            "Original mode preserves the source stream without re-encoding. "
+            "Please select 'Original / Best Available' quality, or choose MP3/M4A format to re-encode."
+        )
+    # Validate incompatible combination: MP3 format with Original quality
+    if fmt == "mp3" and quality == "original":
+        raise ValidationError(
+            "MP3 format requires an MP3 encoding preset (such as 320 kbps, 256 kbps, or VBR High). "
+            "To preserve the original source audio without re-encoding, select 'Original / Best Available' format."
+        )
+
     presets = settings.AUDIO_QUALITY_PRESETS.get(fmt, {})
     if not presets:
         return quality  # no restriction for unknown format
     if quality not in presets:
+        legacy_mapped = getattr(settings, "LEGACY_QUALITY_MAP", {}).get(quality)
+        if legacy_mapped and legacy_mapped in presets:
+            return quality
         raise ValidationError(
             f"Quality '{quality}' is not available for format '{fmt}'. "
             f"Choose from: {', '.join(presets.keys())}."

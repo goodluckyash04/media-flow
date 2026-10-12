@@ -34,6 +34,7 @@ class JobType(models.TextChoices):
 
 
 class AudioFormat(models.TextChoices):
+    ORIGINAL = "original", "Original / Best Available"
     MP3 = "mp3", "MP3"
     M4A = "m4a", "M4A / AAC"
     FLAC = "flac", "FLAC"
@@ -59,9 +60,9 @@ class AppSettings(models.Model):
 
     # Audio defaults
     default_audio_format = models.CharField(
-        max_length=10, choices=AudioFormat.choices, default=AudioFormat.MP3
+        max_length=10, choices=AudioFormat.choices, default=AudioFormat.ORIGINAL
     )
-    default_audio_quality = models.CharField(max_length=20, default="high")
+    default_audio_quality = models.CharField(max_length=20, default="original")
 
     # Theme
     theme = models.CharField(
@@ -106,11 +107,27 @@ class AppSettings(models.Model):
                 "theme": django_settings.DEFAULT_THEME,
             },
         )
+        update_fields = []
         if not created and (obj.ffmpeg_path == "ffmpeg" or not obj.ffmpeg_path):
             if django_settings.FFMPEG_PATH != "ffmpeg":
                 obj.ffmpeg_path = django_settings.FFMPEG_PATH
                 obj.ffprobe_path = django_settings.FFPROBE_PATH
-                obj.save(update_fields=["ffmpeg_path", "ffprobe_path"])
+                update_fields.extend(["ffmpeg_path", "ffprobe_path"])
+
+        # Normalize any legacy quality preset stored in DB
+        legacy_quality_map = {
+            "high": "mp3_320",
+            "best": "original",
+            "medium": "mp3_256",
+            "low": "mp3_192",
+        }
+        valid_qualities = {"original", "mp3_320", "mp3_256", "mp3_192", "mp3_vbr_high"}
+        if obj.default_audio_quality not in valid_qualities:
+            obj.default_audio_quality = legacy_quality_map.get(obj.default_audio_quality, "original")
+            update_fields.append("default_audio_quality")
+
+        if update_fields:
+            obj.save(update_fields=list(set(update_fields)))
         return obj
 
     @property
@@ -138,6 +155,14 @@ class AppSettings(models.Model):
         p = Path(self.download_dir) if self.download_dir else django_settings.DEFAULT_DOWNLOAD_DIR
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def resolved_audio_quality(self) -> str:
+        qual = (self.default_audio_quality or "").lower()
+        if qual in ("best", "high", "medium", "low"):
+            from django.conf import settings as django_settings
+            return getattr(django_settings, "LEGACY_QUALITY_MAP", {}).get(qual, "mp3_256")
+        return qual or "original"
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +195,7 @@ class DownloadJob(models.Model):
     output_format = models.CharField(
         max_length=10, choices=AudioFormat.choices, default=AudioFormat.MP3
     )
-    output_quality = models.CharField(max_length=20, default="high")
+    output_quality = models.CharField(max_length=20, default="mp3_256")
     output_dir = models.TextField(default="")
     filename_template = models.CharField(max_length=500, blank=True, default="")
 
@@ -227,6 +252,84 @@ class DownloadJob(models.Model):
         if self.output_path:
             return Path(self.output_path).name
         return ""
+
+    @property
+    def output_info(self) -> dict:
+        return (self.extra_metadata or {}).get("output_info", {})
+
+    @property
+    def actual_codec(self) -> str:
+        return self.output_info.get("audio_codec") or ""
+
+    @property
+    def actual_container(self) -> str:
+        fmt = self.output_info.get("format_name") or ""
+        if fmt:
+            return fmt.split(",")[0].strip()
+        if self.output_path:
+            return Path(self.output_path).suffix.lstrip(".")
+        return self.output_format
+
+    @property
+    def actual_bitrate(self):
+        br = self.output_info.get("audio_bitrate")
+        try:
+            return int(br) if br else None
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def actual_bitrate_display(self) -> str:
+        br = self.actual_bitrate
+        if br and br > 0:
+            return f"{round(br / 1000)} kbps"
+        return "Unknown"
+
+    @property
+    def source_bitrate_display(self) -> str:
+        br = (self.extra_metadata or {}).get("source_bitrate")
+        if br:
+            try:
+                val = int(br)
+                if val > 1000:
+                    val = round(val / 1000)
+                return f"{val} kbps"
+            except (ValueError, TypeError):
+                pass
+        return "Unknown"
+
+    @property
+    def target_bitrate_display(self) -> str:
+        qual = (self.output_quality or "").lower()
+        if qual == "original" or self.output_format == "original":
+            return "N/A (Source preserved)"
+        if qual in ("mp3_320", "best"):
+            return "320 kbps (CBR)"
+        if qual in ("mp3_256", "high"):
+            return "256 kbps (CBR)"
+        if qual in ("mp3_192", "medium"):
+            return "192 kbps (CBR)"
+        if qual == "mp3_vbr_high":
+            return "VBR (~190–250 kbps)"
+        return "Unknown"
+
+    @property
+    def actual_sample_rate(self):
+        sr = self.output_info.get("sample_rate")
+        return f"{sr} Hz" if sr else ""
+
+    @property
+    def audio_summary_display(self) -> str:
+        parts = []
+        if self.actual_codec:
+            parts.append(self.actual_codec.upper())
+        if self.actual_container:
+            parts.append(self.actual_container.upper())
+        if self.actual_bitrate_display != "Unknown":
+            parts.append(self.actual_bitrate_display)
+        if self.actual_sample_rate:
+            parts.append(self.actual_sample_rate)
+        return " · ".join(parts) if parts else (self.output_format.upper())
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +399,7 @@ class ConversionJob(models.Model):
     output_format = models.CharField(
         max_length=10, choices=AudioFormat.choices, default=AudioFormat.MP3
     )
-    output_quality = models.CharField(max_length=20, default="high")
+    output_quality = models.CharField(max_length=20, default="mp3_256")
     output_dir = models.TextField(default="")
     output_path = models.TextField(blank=True, default="")
     output_size = models.BigIntegerField(null=True, blank=True)

@@ -7,15 +7,15 @@
   <div class="topbar-title">{% block topbar_title %}{% endblock %}</div>
 
   <div class="topbar-actions">
+    <!-- Contextual active queue indicator -->
+    <a href="{% url 'queue' %}" id="topbar-queue-pill" class="topbar-queue-pill" style="display:none;" title="View active downloads">
+      <span class="spinner-grow spinner-grow-sm text-accent" role="status" style="width:7px;height:7px;"></span>
+      <span><span id="topbar-active-count">0</span> active</span>
+    </a>
+
     <!-- Theme toggle -->
     <button class="btn btn-secondary btn-icon btn-sm" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
       <i class="bi bi-moon-stars" id="themeIcon"></i>
     </button>
-
-    <!-- Quick download button -->
-    <a href="{% url 'download' %}" class="btn btn-primary btn-sm" id="topbar-quick-download">
-      <i class="bi bi-plus-lg"></i>
-      <span class="d-none d-lg-inline">New Download</span>
-    </a>
   </div>
 </header>

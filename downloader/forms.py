@@ -22,16 +22,37 @@ from downloader.utils.validators import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+LEGACY_QUALITY_MAP = {
+    "high": "mp3_320",
+    "best": "original",
+    "medium": "mp3_256",
+    "low": "mp3_192",
+}
+
+
+class FlexibleQualityChoiceField(forms.ChoiceField):
+    """ChoiceField that accepts legacy preset keys and transparently maps them to modern choices."""
+    def valid_value(self, value):
+        if value in LEGACY_QUALITY_MAP:
+            return True
+        return super().valid_value(value)
+
+    def clean(self, value):
+        val = super().clean(value)
+        return LEGACY_QUALITY_MAP.get(val, val)
+
+
 def _format_choices():
     return [(k, v) for k, v in settings.SUPPORTED_AUDIO_FORMATS.items()]
 
 
 def _quality_choices():
     return [
-        ("best", "Best available"),
-        ("high", "High"),
-        ("medium", "Medium"),
-        ("low", "Low"),
+        ("original", "Original / Best Available (Preserve source)"),
+        ("mp3_320", "High Quality MP3 (320 kbps)"),
+        ("mp3_256", "Balanced MP3 (256 kbps)"),
+        ("mp3_192", "Smaller MP3 (192 kbps)"),
+        ("mp3_vbr_high", "Efficient MP3 (Variable Bitrate)"),
     ]
 
 
@@ -63,7 +84,7 @@ class DownloadForm(forms.Form):
         choices=_format_choices,
         widget=forms.Select(attrs={"class": "form-select", "id": "id_output_format"}),
     )
-    output_quality = forms.ChoiceField(
+    output_quality = FlexibleQualityChoiceField(
         label="Quality",
         choices=_quality_choices,
         widget=forms.Select(attrs={"class": "form-select", "id": "id_output_quality"}),
@@ -104,6 +125,8 @@ class DownloadForm(forms.Form):
         fmt = cleaned.get("output_format")
         quality = cleaned.get("output_quality")
         if fmt and quality:
+            quality = LEGACY_QUALITY_MAP.get(quality, quality)
+            cleaned["output_quality"] = quality
             try:
                 validate_audio_quality(quality, fmt)
             except Exception as exc:
@@ -133,7 +156,7 @@ class PlaylistForm(forms.Form):
         choices=_format_choices,
         widget=forms.Select(attrs={"class": "form-select", "id": "id_pl_format"}),
     )
-    output_quality = forms.ChoiceField(
+    output_quality = FlexibleQualityChoiceField(
         label="Quality",
         choices=_quality_choices,
         widget=forms.Select(attrs={"class": "form-select", "id": "id_pl_quality"}),
@@ -264,10 +287,11 @@ class SettingsForm(forms.ModelForm):
             ),
             "default_audio_quality": forms.Select(
                 choices=[
-                    ("best", "Best"),
-                    ("high", "High"),
-                    ("medium", "Medium"),
-                    ("low", "Low"),
+                    ("original", "Original / Best Available (Preserve source)"),
+                    ("mp3_320", "High Quality MP3 (320 kbps)"),
+                    ("mp3_256", "Balanced MP3 (256 kbps)"),
+                    ("mp3_192", "Smaller MP3 (192 kbps)"),
+                    ("mp3_vbr_high", "Efficient MP3 (Variable Bitrate)"),
                 ],
                 attrs={"class": "form-select", "id": "id_default_quality"},
             ),
@@ -297,3 +321,7 @@ class SettingsForm(forms.ModelForm):
         if raw:
             validate_output_dir(raw)
         return raw
+
+    def clean_default_audio_quality(self):
+        val = self.cleaned_data.get("default_audio_quality")
+        return LEGACY_QUALITY_MAP.get(val, val)

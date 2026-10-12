@@ -60,61 +60,7 @@ def _get_app_settings() -> AppSettings:
 # ---------------------------------------------------------------------------
 
 def dashboard(request):
-    """Main dashboard: quick stats and recent activity."""
-    active_downloads = DownloadJob.objects.filter(
-        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-    ).order_by("-created_at")[:5]
-
-    recent_downloads = DownloadJob.objects.exclude(
-        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-    ).order_by("-created_at")[:10]
-
-    active_conversions = ConversionJob.objects.filter(
-        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-    ).order_by("-created_at")[:5]
-
-    stats = {
-        "active": DownloadJob.objects.filter(
-            status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-        ).count(),
-        "completed": DownloadJob.objects.filter(status=JobStatus.COMPLETED).count(),
-        "failed": DownloadJob.objects.filter(status=JobStatus.FAILED).count(),
-        "conversions_active": ConversionJob.objects.filter(
-            status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
-        ).count(),
-        "conversions_done": ConversionJob.objects.filter(
-            status=JobStatus.COMPLETED
-        ).count(),
-    }
-
-    try:
-        app_cfg = _get_app_settings()
-        download_dir = app_cfg.download_dir_path
-        from downloader.utils.file_utils import get_directory_size, human_readable_size
-        stats["storage"] = human_readable_size(get_directory_size(download_dir))
-        stats["download_dir"] = str(download_dir)
-    except Exception:
-        stats["storage"] = "N/A"
-        stats["download_dir"] = ""
-
-    return render(
-        request,
-        "downloader/dashboard.html",
-        {
-            "active_downloads": active_downloads,
-            "recent_downloads": recent_downloads,
-            "active_conversions": active_conversions,
-            "stats": stats,
-        },
-    )
-
-
-# ---------------------------------------------------------------------------
-# Download
-# ---------------------------------------------------------------------------
-
-def download_new(request):
-    """Show the new download form and handle inspection + submission."""
+    """Primary home screen: focused media input and active/recent downloads."""
     app_cfg = _get_app_settings()
 
     if request.method == "POST":
@@ -123,10 +69,8 @@ def download_new(request):
             data = form.cleaned_data
 
             if data.get("inspect_only"):
-                # Return metadata as JSON for the preview panel
                 return _inspect_url(data["url"])
 
-            # Create and queue the job
             job = DownloadJob.objects.create(
                 url=data["url"],
                 audio_only=data.get("audio_only", True),
@@ -141,7 +85,7 @@ def download_new(request):
             mgr = get_job_manager()
             mgr.submit_download(str(job.id))
 
-            messages.success(request, f"Download queued successfully.")
+            messages.success(request, "Download queued.")
             return redirect("queue")
     else:
         form = DownloadForm(
@@ -152,15 +96,30 @@ def download_new(request):
             }
         )
 
+    active_downloads = DownloadJob.objects.filter(
+        status__in=[JobStatus.QUEUED, JobStatus.RUNNING]
+    ).order_by("-created_at")[:5]
+
+    recent_downloads = DownloadJob.objects.filter(
+        status=JobStatus.COMPLETED
+    ).order_by("-created_at")[:5]
+
     return render(
         request,
-        "downloader/download.html",
+        "downloader/dashboard.html",
         {
             "form": form,
             "app_cfg": app_cfg,
             "quality_presets_json": json.dumps(settings.AUDIO_QUALITY_PRESETS),
+            "active_downloads": active_downloads,
+            "recent_downloads": recent_downloads,
         },
     )
+
+
+def download_new(request):
+    """Direct alias to the primary download flow for backward compatibility."""
+    return dashboard(request)
 
 
 def _inspect_url(url: str) -> JsonResponse:
@@ -178,8 +137,11 @@ def _inspect_url(url: str) -> JsonResponse:
 def inspect_url(request):
     """AJAX endpoint: fetch metadata for a URL without downloading."""
     try:
-        body = json.loads(request.body)
-        url = body.get("url", "").strip()
+        if request.content_type == "application/json":
+            body = json.loads(request.body.decode("utf-8", errors="replace")) if request.body else {}
+            url = body.get("url", "").strip()
+        else:
+            url = (request.POST.get("url") or "").strip()
     except Exception:
         return _json_error("Invalid request body.")
 
@@ -202,37 +164,59 @@ def playlist_view(request):
     app_cfg = _get_app_settings()
 
     if request.method == "POST":
-        action = request.POST.get("action")
+        # Support both application/json payloads and form-encoded data
+        body = {}
+        if request.content_type == "application/json":
+            try:
+                body = json.loads(request.body.decode("utf-8", errors="replace")) if request.body else {}
+            except Exception:
+                body = {}
+
+        action = request.POST.get("action") or body.get("action")
+        if not action and (request.POST.get("url") or body.get("url")):
+            action = "inspect"
 
         if action == "inspect":
-            form = PlaylistForm(request.POST)
-            if form.is_valid():
-                url = form.cleaned_data["url"]
-                try:
-                    from downloader.services.metadata_service import fetch_playlist_info
-                    info = fetch_playlist_info(url)
-                    return _json_ok({"info": info})
-                except Exception as exc:
-                    return _json_error(str(exc))
-            return _json_error(str(form.errors))
+            url = (request.POST.get("url") or body.get("url") or "").strip()
+            if not url:
+                return _json_error("Playlist URL is required.")
+
+            from downloader.utils.validators import validate_url
+            from django.core.exceptions import ValidationError
+            try:
+                url = validate_url(url)
+            except ValidationError as exc:
+                return _json_error(str(exc))
+
+            try:
+                from downloader.services.metadata_service import fetch_playlist_info
+                info = fetch_playlist_info(url)
+                return _json_ok({"info": info})
+            except Exception as exc:
+                logger.warning("Playlist inspection failed for %s: %s", url, exc)
+                return _json_error(str(exc))
 
         elif action == "download":
-            # Parse the playlist download request
-            try:
-                body = json.loads(request.body)
-            except Exception:
-                body = request.POST.dict()
-
-            url = body.get("url", "")
-            selected_indices = body.get("selected_indices", [])
-            entries = body.get("entries", [])
-            output_format = body.get("output_format", app_cfg.default_audio_format)
-            output_quality = body.get("output_quality", app_cfg.default_audio_quality)
-            output_dir = body.get("output_dir", "") or str(app_cfg.download_dir_path)
-            playlist_title = body.get("playlist_title", "playlist")
+            payload = body if body else request.POST.dict()
+            url = (payload.get("url") or "").strip()
+            selected_indices = payload.get("selected_indices", [])
+            entries = payload.get("entries", [])
+            output_format = payload.get("output_format", app_cfg.default_audio_format)
+            output_quality = payload.get("output_quality", app_cfg.default_audio_quality)
+            from downloader.forms import LEGACY_QUALITY_MAP
+            output_quality = LEGACY_QUALITY_MAP.get(output_quality, output_quality)
+            output_dir = (payload.get("output_dir") or "").strip() or str(app_cfg.download_dir_path)
+            playlist_title = (payload.get("playlist_title") or "").strip() or "playlist"
 
             if not url or not entries:
                 return _json_error("URL and track entries are required.")
+
+            from downloader.utils.validators import validate_url
+            from django.core.exceptions import ValidationError
+            try:
+                url = validate_url(url)
+            except ValidationError as exc:
+                return _json_error(str(exc))
 
             # Create parent playlist job
             parent = DownloadJob.objects.create(
@@ -265,15 +249,21 @@ def playlist_view(request):
             get_job_manager().submit_download(str(parent.id))
             return _json_ok({"job_id": str(parent.id)})
 
-    else:
-        form = PlaylistForm(
-            initial={
-                "output_format": app_cfg.default_audio_format,
-                "output_quality": app_cfg.default_audio_quality,
-            }
-        )
+        # Return 400 JSON error for unsupported or missing action on POST
+        return _json_error("Invalid or missing action for playlist request.")
 
+    # GET request
+    initial_data = {
+        "output_format": app_cfg.default_audio_format,
+        "output_quality": app_cfg.default_audio_quality,
+    }
+    url_param = request.GET.get("url", "").strip()
+    if url_param:
+        initial_data["url"] = url_param
+
+    form = PlaylistForm(initial=initial_data)
     return render(request, "downloader/playlist.html", {"form": form, "app_cfg": app_cfg})
+
 
 
 # ---------------------------------------------------------------------------
@@ -606,9 +596,13 @@ def library_view(request):
 @require_POST
 def delete_history_record(request, job_id):
     """Delete a job history record (NOT the output file)."""
+    delete_file = False
     try:
-        body = json.loads(request.body) if request.body else {}
-        delete_file = body.get("delete_file", False)
+        if request.content_type == "application/json":
+            body = json.loads(request.body.decode("utf-8", errors="replace")) if request.body else {}
+            delete_file = bool(body.get("delete_file", False))
+        else:
+            delete_file = request.POST.get("delete_file") in ("true", "1", True)
     except Exception:
         delete_file = False
 
@@ -736,8 +730,11 @@ def update_ytdlp(request):
 def spotify_inspect(request):
     """Inspect a Spotify URL and return track/playlist metadata."""
     try:
-        body = json.loads(request.body)
-        url = body.get("url", "").strip()
+        if request.content_type == "application/json":
+            body = json.loads(request.body.decode("utf-8", errors="replace")) if request.body else {}
+            url = body.get("url", "").strip()
+        else:
+            url = (request.POST.get("url") or "").strip()
     except Exception:
         return _json_error("Invalid request body.")
 

@@ -25,7 +25,7 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
-_raw_hosts = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost")
+_raw_hosts = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
 ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(",") if h.strip()]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -189,9 +189,9 @@ FFPROBE_PATH = os.getenv("FFPROBE_PATH", "") or (str(_local_ffprobe) if _local_f
 # Job concurrency
 MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "3"))
 
-# Audio defaults
-DEFAULT_AUDIO_FORMAT = os.getenv("DEFAULT_AUDIO_FORMAT", "mp3")
-DEFAULT_AUDIO_QUALITY = os.getenv("DEFAULT_AUDIO_QUALITY", "high")
+# Audio defaults (Original / Best Available is default for new installations)
+DEFAULT_AUDIO_FORMAT = os.getenv("DEFAULT_AUDIO_FORMAT", "original")
+DEFAULT_AUDIO_QUALITY = os.getenv("DEFAULT_AUDIO_QUALITY", "original")
 
 # Filename template (yt-dlp style)
 FILENAME_TEMPLATE = os.getenv(
@@ -213,6 +213,7 @@ JOB_POLL_INTERVAL_MS = 2000
 
 # Supported audio formats and their display labels
 SUPPORTED_AUDIO_FORMATS = {
+    "original": "Original / Best Available",
     "mp3": "MP3",
     "m4a": "M4A / AAC",
     "flac": "FLAC (Lossless)",
@@ -220,30 +221,51 @@ SUPPORTED_AUDIO_FORMATS = {
     "opus": "Opus",
 }
 
-# Quality presets per format
+# Explicit quality presets per format with accurate labels
 AUDIO_QUALITY_PRESETS = {
+    "original": {
+        "original": {"bitrate": None, "label": "Original quality — preserve best available source audio"},
+    },
     "mp3": {
-        "best": {"bitrate": "320k", "label": "Best (320 kbps)"},
-        "high": {"bitrate": "256k", "label": "High (256 kbps)"},
-        "medium": {"bitrate": "192k", "label": "Medium (192 kbps)"},
-        "low": {"bitrate": "128k", "label": "Low (128 kbps)"},
+        "original": {"bitrate": None, "label": "Original quality — preserve source without MP3 re-encoding"},
+        "mp3_320": {"bitrate": "320k", "label": "High quality MP3 (320 kbps target)"},
+        "mp3_256": {"bitrate": "256k", "label": "Balanced MP3 (256 kbps target)"},
+        "mp3_192": {"bitrate": "192k", "label": "Smaller MP3 (192 kbps target)"},
+        "mp3_vbr_high": {"bitrate": None, "label": "Efficient MP3 (high-quality variable bitrate)"},
+        # Legacy preset aliases to preserve saved settings safely
+        "best": {"bitrate": "320k", "label": "High quality MP3 (320 kbps target)"},
+        "high": {"bitrate": "256k", "label": "Balanced MP3 (256 kbps target)"},
+        "medium": {"bitrate": "192k", "label": "Smaller MP3 (192 kbps target)"},
+        "low": {"bitrate": "128k", "label": "Low MP3 (128 kbps target)"},
     },
     "m4a": {
+        "original": {"bitrate": None, "label": "Original quality — preserve source stream"},
         "best": {"bitrate": "256k", "label": "Best (256 kbps)"},
         "high": {"bitrate": "192k", "label": "High (192 kbps)"},
         "medium": {"bitrate": "128k", "label": "Medium (128 kbps)"},
         "low": {"bitrate": "96k", "label": "Low (96 kbps)"},
     },
     "flac": {
+        "original": {"bitrate": None, "label": "Original quality — preserve source stream"},
         "best": {"bitrate": None, "label": "Lossless (no re-encoding loss)"},
     },
     "wav": {
+        "original": {"bitrate": None, "label": "Original quality — preserve source stream"},
         "best": {"bitrate": None, "label": "Uncompressed PCM"},
     },
     "opus": {
+        "original": {"bitrate": None, "label": "Original quality — preserve source stream"},
         "best": {"bitrate": "320k", "label": "Best (320 kbps)"},
         "high": {"bitrate": "192k", "label": "High (192 kbps)"},
         "medium": {"bitrate": "128k", "label": "Medium (128 kbps)"},
         "low": {"bitrate": "64k", "label": "Low (64 kbps)"},
     },
+}
+
+# Legacy mapping for backwards-compatibility
+LEGACY_QUALITY_MAP = {
+    "best": "mp3_320",
+    "high": "mp3_256",
+    "medium": "mp3_192",
+    "low": "mp3_192",
 }

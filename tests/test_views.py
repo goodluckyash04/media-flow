@@ -132,3 +132,77 @@ def test_delete_history_record_api(client):
     )
     assert response.status_code == 200
     assert not DownloadJob.objects.filter(pk=job.id).exists()
+
+
+@pytest.mark.django_db
+def test_playlist_inspect_json(client):
+    with patch("downloader.services.metadata_service.fetch_playlist_info") as mock_fetch:
+        mock_fetch.return_value = {
+            "title": "Cool Playlist",
+            "uploader": "Cool Curator",
+            "webpage_url": "https://www.youtube.com/playlist?list=PL123",
+            "thumbnail": "https://example.com/thumb.jpg",
+            "entry_count": 2,
+            "entries": [
+                {"index": 1, "title": "Track 1", "url": "https://www.youtube.com/watch?v=1", "thumbnail": ""},
+                {"index": 2, "title": "Track 2", "url": "https://www.youtube.com/watch?v=2", "thumbnail": ""},
+            ],
+        }
+        response = client.post(
+            reverse("playlist"),
+            data=json.dumps({"action": "inspect", "url": "https://www.youtube.com/playlist?list=PL123"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["info"]["title"] == "Cool Playlist"
+        assert len(data["info"]["entries"]) == 2
+
+
+@pytest.mark.django_db
+def test_playlist_inspect_form_data(client):
+    """Ensure form POST does not raise RawPostDataException and successfully inspects."""
+    with patch("downloader.services.metadata_service.fetch_playlist_info") as mock_fetch:
+        mock_fetch.return_value = {
+            "title": "Form Playlist",
+            "uploader": "Form Curator",
+            "webpage_url": "https://www.youtube.com/playlist?list=PL456",
+            "thumbnail": "https://example.com/thumb.jpg",
+            "entry_count": 1,
+            "entries": [
+                {"index": 1, "title": "Track 1", "url": "https://www.youtube.com/watch?v=1", "thumbnail": ""},
+            ],
+        }
+        response = client.post(
+            reverse("playlist"),
+            data={"action": "inspect", "url": "https://www.youtube.com/playlist?list=PL456"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["info"]["title"] == "Form Playlist"
+
+
+@pytest.mark.django_db
+def test_playlist_inspect_defaults_action(client):
+    """When action is omitted but url is supplied, default to inspect."""
+    with patch("downloader.services.metadata_service.fetch_playlist_info") as mock_fetch:
+        mock_fetch.return_value = {
+            "title": "Default Action Playlist",
+            "uploader": "Default Curator",
+            "webpage_url": "https://www.youtube.com/playlist?list=PL789",
+            "thumbnail": "",
+            "entry_count": 0,
+            "entries": [],
+        }
+        response = client.post(
+            reverse("playlist"),
+            data=json.dumps({"url": "https://www.youtube.com/playlist?list=PL789"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["info"]["title"] == "Default Action Playlist"
+

@@ -121,6 +121,19 @@ def run_download_job(job_id: str, cancel_check: Callable[[], bool]):
         # Determine the actual output file
         output_path = _find_output_file(info, output_dir, opts)
 
+        output_info = {}
+        if output_path and output_path.exists():
+            from downloader.services.conversion_service import probe_file
+            output_info = probe_file(output_path)
+
+        meta = dict(job.extra_metadata or {})
+        if output_info:
+            meta["output_info"] = output_info
+        if info:
+            abr = info.get("abr")
+            if abr:
+                meta["source_bitrate"] = abr
+
         _save_job_fields(
             job_id,
             status=JobStatus.COMPLETED,
@@ -129,6 +142,7 @@ def run_download_job(job_id: str, cancel_check: Callable[[], bool]):
             stage="Complete",
             output_path=str(output_path) if output_path else "",
             file_size=output_path.stat().st_size if output_path and output_path.exists() else None,
+            extra_metadata=meta,
             speed="",
             eta="",
         )
@@ -313,23 +327,58 @@ def _build_ydl_opts(
     }
 
     if job.audio_only:
-        fmt = job.output_format or "mp3"
-        quality = job.output_quality or "high"
-        quality_presets = settings.AUDIO_QUALITY_PRESETS.get(fmt, {})
-        preset = quality_presets.get(quality, quality_presets.get("high", {}))
-        bitrate = preset.get("bitrate") if preset else None
+        fmt = (job.output_format or "original").lower()
+        quality = (job.output_quality or "original").lower()
+
+        # Resolve legacy quality presets safely
+        if quality in ("best", "high", "medium", "low"):
+            legacy_map = getattr(settings, "LEGACY_QUALITY_MAP", {})
+            quality = legacy_map.get(quality, "mp3_256")
 
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt,
-                "preferredquality": bitrate.rstrip("k") if bitrate else "192",
-            },
-            {"key": "FFmpegMetadata"},
-            {"key": "EmbedThumbnail"},
-        ]
-        opts["writethumbnail"] = True
+
+        if fmt == "original" or quality == "original":
+            # Mode A: Original / Best Available
+            # Preserve original audio stream and container without lossy re-encoding
+            opts["postprocessors"] = [
+                {"key": "FFmpegMetadata"},
+            ]
+        elif quality == "mp3_vbr_high":
+            # Mode E: MP3 VBR High Quality (-q:a 2)
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": None,
+                },
+                {"key": "FFmpegMetadata"},
+            ]
+            opts["postprocessor_args"] = {"ExtractAudio": ["-q:a", "2"]}
+        else:
+            # Mode B, C, D: Fixed bitrate CBR MP3 or other explicit audio formats
+            target_codec = "mp3" if fmt in ("mp3", "original") else fmt
+            quality_presets = settings.AUDIO_QUALITY_PRESETS.get(target_codec, {})
+            preset = quality_presets.get(quality, {})
+            bitrate = preset.get("bitrate") if preset else None
+
+            if not bitrate:
+                if quality == "mp3_320":
+                    bitrate = "320k"
+                elif quality == "mp3_256":
+                    bitrate = "256k"
+                elif quality == "mp3_192":
+                    bitrate = "192k"
+                else:
+                    bitrate = "256k"
+
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": target_codec,
+                    "preferredquality": bitrate.rstrip("k") if bitrate else "256",
+                },
+                {"key": "FFmpegMetadata"},
+            ]
     else:
         opts["format"] = "bestvideo+bestaudio/best"
         opts["merge_output_format"] = "mp4"

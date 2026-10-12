@@ -104,12 +104,21 @@ def probe_file(file_path: Path) -> Dict:
         audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
         video_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
 
+        dur = float(fmt.get("duration", 0))
+        size_bytes = int(fmt.get("size", 0)) or (file_path.stat().st_size if file_path.exists() else 0)
+        bitrate = audio_stream.get("bit_rate") or fmt.get("bit_rate")
+        if not bitrate and dur > 0 and size_bytes > 0:
+            bitrate = int((size_bytes * 8) / dur)
+
         return {
-            "duration": float(fmt.get("duration", 0)),
-            "size": int(fmt.get("size", 0)),
+            "duration": dur,
+            "size": size_bytes,
             "format_name": fmt.get("format_name", ""),
             "audio_codec": audio_stream.get("codec_name", ""),
-            "audio_bitrate": audio_stream.get("bit_rate"),
+            "audio_bitrate": int(bitrate) if bitrate else None,
+            "sample_rate": int(audio_stream.get("sample_rate")) if audio_stream.get("sample_rate") else None,
+            "channels": int(audio_stream.get("channels")) if audio_stream.get("channels") else None,
+            "channel_layout": audio_stream.get("channel_layout", ""),
             "video_codec": video_stream.get("codec_name", ""),
             "has_audio": bool(audio_stream),
             "has_video": bool(video_stream),
@@ -121,6 +130,10 @@ def probe_file(file_path: Path) -> Dict:
             "size": file_path.stat().st_size if file_path.exists() else 0,
             "format_name": file_path.suffix.lstrip("."),
             "audio_codec": "",
+            "audio_bitrate": None,
+            "sample_rate": None,
+            "channels": None,
+            "channel_layout": "",
             "video_codec": "",
             "has_audio": True,
             "has_video": False,
@@ -246,8 +259,21 @@ def _build_ffmpeg_cmd(
 
     if fmt == "mp3":
         cmd += ["-codec:a", "libmp3lame"]
-        if bitrate:
+        if quality == "mp3_vbr_high":
+            cmd += ["-q:a", "2"]
+        else:
+            if not bitrate:
+                if quality in ("mp3_320", "best"):
+                    bitrate = "320k"
+                elif quality in ("mp3_256", "high"):
+                    bitrate = "256k"
+                elif quality in ("mp3_192", "medium"):
+                    bitrate = "192k"
+                else:
+                    bitrate = "256k"
             cmd += ["-b:a", bitrate]
+    elif fmt == "original":
+        cmd += ["-codec:a", "copy"]
     elif fmt == "m4a":
         cmd += ["-codec:a", "aac"]
         if bitrate:

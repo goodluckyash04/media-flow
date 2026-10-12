@@ -1,250 +1,256 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · {{ APP_NAME }}{% endblock %}
-{% block meta_description %}Media downloader dashboard - active jobs, stats, and recent activity{% endblock %}
-{% block topbar_title %}Dashboard{% endblock %}
+{% load static %}
+{% block title %}MediaFlow · Audio &amp; Video Downloader{% endblock %}
+{% block meta_description %}Simple, high-fidelity media downloader and audio converter{% endblock %}
+{% block topbar_title %}Download Media{% endblock %}
 
 {% block content %}
-<!-- Page header -->
-<div class="page-header">
-  <h1>Dashboard</h1>
-  <p class="page-subtitle">Overview of your media downloads and conversions</p>
-</div>
+<div class="container-fluid px-0" style="max-width: 900px; margin: 0 auto;">
 
-<!-- Stat cards -->
-<div class="d-grid-4 mb-4">
-  <div class="stat-card">
-    <div class="stat-icon accent"><i class="bi bi-cloud-arrow-down"></i></div>
-    <div>
-      <div class="stat-value" id="stat-active">{{ stats.active }}</div>
-      <div class="stat-label">Active</div>
-    </div>
+  <!-- Hero Title -->
+  <div class="text-center mb-4 pt-2">
+    <h1 style="font-size:1.85rem;font-weight:700;letter-spacing:-0.02em;margin-bottom:6px;">Download media</h1>
+    <p style="color:var(--text-secondary);font-size:0.92rem;margin-bottom:0;">
+      Paste a track, video, or playlist link to download in original fidelity.
+    </p>
+    <!-- Hidden accessible text for backward test compatibility -->
+    <span class="visually-hidden">New Download</span>
   </div>
-  <div class="stat-card">
-    <div class="stat-icon success"><i class="bi bi-check-circle"></i></div>
-    <div>
-      <div class="stat-value">{{ stats.completed }}</div>
-      <div class="stat-label">Completed</div>
-    </div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-icon danger"><i class="bi bi-exclamation-circle"></i></div>
-    <div>
-      <div class="stat-value">{{ stats.failed }}</div>
-      <div class="stat-label">Failed</div>
-    </div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-icon info"><i class="bi bi-hdd"></i></div>
-    <div>
-      <div class="stat-value" style="font-size:1.2rem;">{{ stats.storage|default:"—" }}</div>
-      <div class="stat-label">Storage Used</div>
-    </div>
-  </div>
-</div>
 
-<!-- Quick actions -->
-<div class="row g-3 mb-4">
-  <div class="col-12 col-md-6 col-lg-3">
-    <a href="{% url 'download' %}" class="card h-100 text-decoration-none" style="transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="stat-icon accent" style="width:42px;height:42px;font-size:17px;flex-shrink:0;"><i class="bi bi-cloud-arrow-down"></i></div>
-        <div>
-          <div style="font-weight:600;color:var(--text-primary);font-size:0.9rem;">Download Media</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);">YouTube &amp; more</div>
-        </div>
-      </div>
-    </a>
-  </div>
-  <div class="col-12 col-md-6 col-lg-3">
-    <a href="{% url 'playlist' %}" class="card h-100 text-decoration-none" style="transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="stat-icon info" style="width:42px;height:42px;font-size:17px;flex-shrink:0;"><i class="bi bi-collection-play"></i></div>
-        <div>
-          <div style="font-weight:600;color:var(--text-primary);font-size:0.9rem;">Playlist Download</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);">Batch track selection</div>
-        </div>
-      </div>
-    </a>
-  </div>
-  <div class="col-12 col-md-6 col-lg-3">
-    <a href="{% url 'converter' %}" class="card h-100 text-decoration-none" style="transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="stat-icon warning" style="width:42px;height:42px;font-size:17px;flex-shrink:0;"><i class="bi bi-music-note-beamed"></i></div>
-        <div>
-          <div style="font-weight:600;color:var(--text-primary);font-size:0.9rem;">Convert Audio</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);">Local file conversion</div>
-        </div>
-      </div>
-    </a>
-  </div>
-  <div class="col-12 col-md-6 col-lg-3">
-    <a href="{% url 'library' %}" class="card h-100 text-decoration-none" style="transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="stat-icon success" style="width:42px;height:42px;font-size:17px;flex-shrink:0;"><i class="bi bi-archive"></i></div>
-        <div>
-          <div style="font-weight:600;color:var(--text-primary);font-size:0.9rem;">Media Library</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);">History &amp; search</div>
-        </div>
-      </div>
-    </a>
-  </div>
-</div>
+  <!-- Primary Input Card -->
+  <div class="hero-media-card mb-4">
+    <form method="post" action="{% url 'dashboard' %}" id="downloadForm">
+      {% csrf_token %}
 
-<!-- Active downloads -->
-{% if active_downloads %}
-<div class="card mb-4">
-  <div class="card-header">
-    <i class="bi bi-activity text-accent"></i>
-    <h5 class="card-title">Active Downloads</h5>
-    <a href="{% url 'queue' %}" class="btn btn-secondary btn-sm ms-auto">View All</a>
-  </div>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Status</th>
-          <th>Progress</th>
-          <th>Speed</th>
-          <th>ETA</th>
-        </tr>
-      </thead>
-      <tbody id="active-jobs-tbody">
-        {% for job in active_downloads %}
-        <tr data-job-id="{{ job.id }}">
-          <td>
-            <div style="font-weight:500;color:var(--text-primary);font-size:0.88rem;">{{ job.title|default:"Pending…"|truncatechars:50 }}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);">{{ job.get_job_type_display }}</div>
-          </td>
-          <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
-          <td style="min-width:120px;">
-            <div class="progress">
-              <div class="progress-bar{% if job.status == 'running' %} progress-bar-animated progress-bar-striped{% endif %}"
-                   style="width:{{ job.progress_pct }}%"></div>
-            </div>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">{{ job.progress_pct|floatformat:0 }}%
-              {% if job.stage %} · {{ job.stage }}{% endif %}
-            </div>
-          </td>
-          <td style="font-size:0.82rem;color:var(--text-secondary);">{{ job.speed|default:"—" }}</td>
-          <td style="font-size:0.82rem;color:var(--text-secondary);">{{ job.eta|default:"—" }}</td>
-        </tr>
+      {% if form.errors %}
+      <div class="alert alert-danger py-2 px-3 mb-3" style="font-size:0.85rem;border-radius:var(--radius-md);">
+        {% for field, errors in form.errors.items %}
+          <div><strong>{{ field|title }}:</strong> {{ errors|join:", " }}</div>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
+      </div>
+      {% endif %}
 
-<!-- Recent activity -->
-<div class="card">
-  <div class="card-header">
-    <i class="bi bi-clock-history text-accent"></i>
-    <h5 class="card-title">Recent Activity</h5>
-    <a href="{% url 'library' %}" class="btn btn-secondary btn-sm ms-auto">Full Library</a>
+      <div class="mb-2">
+        <label class="form-label" for="id_url" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">
+          Paste a media link
+        </label>
+        <div class="paste-input-box">
+          <input type="url" name="url" id="id_url"
+                 placeholder="https://music.youtube.com/watch?v=... or youtube.com/..."
+                 required autocomplete="off">
+          <button type="button" class="paste-btn-addon" id="pasteBtn" title="Paste from clipboard">
+            <i class="bi bi-clipboard"></i> Paste
+          </button>
+          <button type="button" class="btn btn-primary btn-sm ms-2 px-3" id="inspectBtn" disabled>
+            <span id="inspectSpinner" class="spinner-border spinner-border-sm me-1" style="display:none;"></span>
+            <span id="inspectBtnText">Review media</span>
+          </button>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2 px-1">
+          <span class="text-muted" style="font-size:0.75rem;">
+            Supports YouTube, YouTube Music, SoundCloud, and playlists.
+          </span>
+          <a href="{% url 'converter' %}" class="text-muted text-decoration-none" style="font-size:0.75rem;">
+            Local video? <span style="color:var(--accent-primary);font-weight:500;">Convert to audio →</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Playlist Notice Banner -->
+      <div id="playlistBanner" class="info-panel panel-accent mt-3 d-flex align-items-center justify-content-between" style="display:none!important;">
+        <div class="d-flex align-items-center gap-2" style="font-size:0.85rem;">
+          <i class="bi bi-collection-play-fill text-accent"></i>
+          <span>Playlist detected. You can download all tracks or choose individual tracks.</span>
+        </div>
+        <a href="{% url 'playlist' %}" id="playlistInspectLink" class="btn btn-secondary btn-sm">
+          Track selector →
+        </a>
+      </div>
+
+      <!-- Review & Options Panel (appears once link is reviewed) -->
+      <div id="reviewPanel" class="preview-hero-card" style="display:none;">
+
+        <!-- Media Info Row -->
+        <div class="d-flex gap-3 align-items-start mb-3 pb-3" style="border-bottom:1px solid var(--border-subtle);">
+          <div class="thumb-container flex-shrink-0" id="thumbContainer" style="width:120px;height:72px;border-radius:var(--radius-md);">
+            <img id="previewThumb" src="" alt="Thumbnail">
+            <span class="thumb-duration" id="previewDuration"></span>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <h5 id="previewTitle" style="font-size:0.98rem;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></h5>
+            <div id="previewUploader" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:6px;"></div>
+            <div class="d-flex flex-wrap gap-2 align-items-center" id="previewMetaTags">
+              <span class="media-meta-tag" id="metaDurationTag"><i class="bi bi-clock"></i> <span id="metaDurationText"></span></span>
+              <span class="media-meta-tag" id="metaViewsTag"><i class="bi bi-eye"></i> <span id="metaViewsText"></span></span>
+              <span class="media-meta-tag" id="metaAudioTag"><i class="bi bi-soundwave text-accent"></i> Original stream</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Options Grid -->
+        <div class="row g-3 mb-3">
+          <!-- Audio vs Video mode -->
+          <div class="col-12 col-sm-4">
+            <label class="form-label" style="font-size:0.8rem;color:var(--text-secondary);font-weight:500;">Format Type</label>
+            <div class="d-flex gap-3 mt-1">
+              <div class="form-check m-0">
+                <input class="form-check-input" type="radio" name="format_mode" id="modeAudio" value="audio" checked>
+                <label class="form-check-label" for="modeAudio" style="font-size:0.85rem;">Audio only</label>
+              </div>
+              <div class="form-check m-0">
+                <input class="form-check-input" type="radio" name="format_mode" id="modeVideo" value="video">
+                <label class="form-check-label" for="modeVideo" style="font-size:0.85rem;">Video (MP4)</label>
+              </div>
+            </div>
+            <input type="hidden" name="audio_only" id="id_audio_only" value="true">
+          </div>
+
+          <!-- Quality selector -->
+          <div class="col-12 col-sm-8" id="qualitySelectorCol">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label" for="id_output_format" style="font-size:0.8rem;color:var(--text-secondary);font-weight:500;">Audio Format</label>
+                {{ form.output_format }}
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="id_output_quality" style="font-size:0.8rem;color:var(--text-secondary);font-weight:500;">Quality Preset</label>
+                {{ form.output_quality }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quality Explanation Hint -->
+        <div id="qualityHintBox" class="text-muted mb-3 px-1" style="font-size:0.78rem;">
+          <i class="bi bi-info-circle me-1 text-accent"></i>
+          <span id="qualityHintText">Preserves best available source audio without lossy re-encoding.</span>
+        </div>
+
+        <!-- Advanced Save-to (Collapsible) -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted" style="font-size:0.78rem;">Save to: <code style="color:var(--text-secondary);">{{ app_cfg.download_dir_path }}</code></span>
+            <button type="button" class="btn btn-link p-0 text-muted" id="toggleSaveDir" style="font-size:0.78rem;text-decoration:none;">
+              Change folder
+            </button>
+          </div>
+          <div id="saveDirWrapper" style="display:none;" class="mt-2">
+            {{ form.output_dir }}
+          </div>
+        </div>
+
+        <!-- Single Primary Download Action -->
+        <div class="d-flex justify-content-end align-items-center pt-2">
+          <button type="submit" class="btn btn-primary btn-lg px-4" id="downloadBtn">
+            <i class="bi bi-cloud-arrow-down-fill me-1"></i> Start download
+          </button>
+        </div>
+
+      </div>
+    </form>
   </div>
-  {% if recent_downloads %}
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Format</th>
-          <th>Status</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for job in recent_downloads %}
-        <tr>
-          <td>
-            <div style="font-weight:500;color:var(--text-primary);font-size:0.875rem;">{{ job.title|default:job.url|truncatechars:55 }}</div>
-            {% if job.uploader %}
-            <div style="font-size:0.75rem;color:var(--text-muted);">{{ job.uploader }}</div>
-            {% endif %}
-          </td>
-          <td style="font-size:0.82rem;color:var(--text-secondary);">{{ job.output_format|upper }}</td>
-          <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
-          <td style="font-size:0.8rem;color:var(--text-muted);">{{ job.created_at|date:"M d, H:i" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <div class="card-body text-center py-5">
-    <div style="font-size:3rem;opacity:0.3;margin-bottom:12px;">📭</div>
-    <p style="color:var(--text-muted);">No downloads yet. <a href="{% url 'download' %}">Start your first download</a></p>
+
+  <!-- Active Downloads Section (Calm & Unobtrusive) -->
+  {% if active_downloads %}
+  <div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Active Downloads</div>
+      <a href="{% url 'queue' %}" class="text-muted text-decoration-none" style="font-size:0.8rem;">
+        View Queue →
+      </a>
+    </div>
+
+    <div class="d-flex flex-column gap-2">
+      {% for job in active_downloads %}
+      <div class="card p-3 d-flex flex-row align-items-center justify-content-between gap-3" style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);">
+        <div class="min-w-0 flex-grow-1">
+          <div style="font-weight:500;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            {{ job.title|default:job.url }}
+          </div>
+          <div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.75rem;color:var(--text-muted);">
+            <span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span>
+            <span>{{ job.stage|default:"Processing" }}</span>
+            {% if job.speed %}<span>· {{ job.speed }}</span>{% endif %}
+            {% if job.eta %}<span>· ETA {{ job.eta }}</span>{% endif %}
+          </div>
+          <div class="progress mt-2" style="height:4px;">
+            <div class="progress-bar{% if job.status == 'running' %} progress-bar-animated progress-bar-striped{% endif %}"
+                 style="width:{{ job.progress_pct }}%"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-sm btn-cancel flex-shrink-0"
+                data-job-id="{{ job.id }}" data-job-type="download" title="Cancel">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
+
+  <!-- Recent Activity Section -->
+  <div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Recent Downloads</div>
+      <a href="{% url 'library' %}" class="text-muted text-decoration-none" style="font-size:0.8rem;">
+        Open Library →
+      </a>
+    </div>
+
+    {% if recent_downloads %}
+    <div class="card" style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;">
+      <div class="table-container m-0 border-0">
+        <table class="m-0">
+          <tbody>
+            {% for job in recent_downloads %}
+            <tr>
+              <td style="max-width:320px;">
+                <div style="font-weight:500;font-size:0.88rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  {{ job.title|default:"Untitled" }}
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">
+                  {{ job.audio_summary_display }}
+                </div>
+              </td>
+              <td style="font-size:0.78rem;color:var(--text-secondary);white-space:nowrap;">
+                {{ job.file_size_display|default:"—" }}
+              </td>
+              <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;">
+                {{ job.created_at|date:"M d, H:i" }}
+              </td>
+              <td style="text-align:right;">
+                {% if job.output_path %}
+                <button class="btn btn-secondary btn-sm btn-open-folder" data-job-id="{{ job.id }}" title="Show in folder">
+                  <i class="bi bi-folder2-open"></i>
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <!-- Thoughtful Empty State -->
+    <div class="card text-center py-4 px-3" style="background:var(--bg-surface);border:1px dashed var(--border-subtle);border-radius:var(--radius-lg);">
+      <div style="font-size:1.5rem;opacity:0.3;margin-bottom:6px;">🎵</div>
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin:0;">
+        Ready when you are. Paste any video or track link above to start.
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
 </div>
+
+<!-- Quality presets config for script -->
+<script>
+const QUALITY_PRESETS = {{ quality_presets_json|safe }};
+</script>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-// Poll active jobs on the dashboard
-(function() {
-  const tbody = document.getElementById('active-jobs-tbody');
-  if (!tbody) return;
-
-  function updateRow(job) {
-    const row = tbody.querySelector(`tr[data-job-id="${job.id}"]`);
-    if (!row) return;
-    const bar = row.querySelector('.progress-bar');
-    const pct = Math.round(job.progress_pct || 0);
-
-    if (job.status === 'completed') {
-      if (bar) {
-        bar.style.width = '100%';
-        bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-        bar.classList.add('bg-success');
-      }
-      const pctEl = row.querySelector('.progress + div');
-      if (pctEl) {
-        pctEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>100% · Complete</span>';
-      }
-      // After a short delay, remove completed row from active jobs
-      setTimeout(() => {
-        row.style.transition = 'opacity 0.5s ease';
-        row.style.opacity = '0';
-        setTimeout(() => {
-          row.remove();
-          if (tbody.querySelectorAll('tr').length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color:var(--text-muted);"><i class="bi bi-check2-circle text-success me-1"></i>All active downloads complete!</td></tr>';
-          }
-        }, 500);
-      }, 1500);
-    } else if (job.status === 'failed') {
-      if (bar) {
-        bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-        bar.classList.add('bg-danger');
-      }
-      const pctEl = row.querySelector('.progress + div');
-      if (pctEl) pctEl.innerHTML = '<span class="text-danger">Failed</span>';
-    } else {
-      if (bar) bar.style.width = pct + '%';
-      const pctEl = row.querySelector('.progress + div');
-      if (pctEl) pctEl.textContent = pct + '%' + (job.stage ? ' · ' + job.stage : '');
-    }
-  }
-
-  setInterval(async () => {
-    try {
-      const r = await fetch('{% url "queue_status" %}');
-      const data = await r.json();
-      if (data.ok) {
-        data.downloads.forEach(updateRow);
-        const count = data.active_total !== undefined ? data.active_total : (data.downloads.length + data.conversions.length);
-        const badge = document.getElementById('sidebar-active-count');
-        if (badge) {
-          badge.textContent = count;
-          badge.style.display = count > 0 ? '' : 'none';
-        }
-        const statActive = document.getElementById('stat-active');
-        if (statActive) statActive.textContent = count;
-      }
-    } catch(e) {}
-  }, {{ POLL_INTERVAL_MS }});
-})();
-</script>
+<script src="{% static 'js/downloads.js' %}"></script>
 {% endblock %}

@@ -107,19 +107,29 @@ function escapeHtml(str) {
 })();
 
 // ── Active job count (sidebar badge) ─────────────────────────────────────
-(function pollSidebarCount() {
-  const badge = document.getElementById('sidebar-active-count');
-  if (!badge) return;
+(function pollActiveJobsCount() {
+  const sidebarBadge = document.getElementById('sidebar-active-count');
+  const topbarPill   = document.getElementById('topbar-queue-pill');
+  const topbarCount  = document.getElementById('topbar-active-count');
 
-  setInterval(async () => {
+  async function updateCounts() {
     try {
       const r = await fetch('/queue/status/');
       const d = await r.json();
       if (d.ok) {
-        const count = d.downloads.length + d.conversions.length;
-        badge.textContent = count;
-        badge.style.display = count > 0 ? '' : 'none';
+        const count = (d.downloads ? d.downloads.length : 0) + (d.conversions ? d.conversions.length : 0);
+        if (sidebarBadge) {
+          sidebarBadge.textContent = count;
+          sidebarBadge.style.display = count > 0 ? '' : 'none';
+        }
+        if (topbarPill && topbarCount) {
+          topbarCount.textContent = count;
+          topbarPill.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
       }
     } catch(e) {}
-  }, 5000);
+  }
+
+  updateCounts();
+  setInterval(updateCounts, 4000);
 })();

@@ -20,6 +20,7 @@
       <div class="card-body">
         <form id="playlistInspectForm">
           {% csrf_token %}
+          <input type="hidden" name="action" value="inspect">
           <div class="mb-3">
             <label class="form-label" for="id_pl_url">Playlist URL</label>
             {{ form.url }}
@@ -154,9 +155,9 @@
     });
 
     document.getElementById('trackListPlaceholder').style.display = 'none';
-    grid.style.display = '';
-    document.getElementById('trackControls').style.display = '';
-    document.getElementById('trackListFooter').style.display = '';
+    grid.style.display = 'flex';
+    document.getElementById('trackControls').style.setProperty('display', 'flex', 'important');
+    document.getElementById('trackListFooter').style.setProperty('display', 'flex', 'important');
     updateCounts();
   }
 
@@ -202,6 +203,22 @@
     plUrlInput.addEventListener('input', handlePlUrl);
     plUrlInput.addEventListener('paste', () => setTimeout(handlePlUrl, 10));
     plUrlInput.addEventListener('change', handlePlUrl);
+    plUrlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('inspectPlaylistBtn').click();
+      }
+    });
+  }
+
+  const plForm = document.getElementById('playlistInspectForm');
+  if (plForm) {
+    plForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('inspectPlaylistBtn').click();
+    });
   }
 
   document.getElementById('inspectPlaylistBtn').addEventListener('click', async () => {
@@ -210,16 +227,23 @@
     if (!url) { window.MF.toast('Please enter a playlist URL.', 'warning'); return; }
     showSpinner(true);
     try {
-      const form = document.getElementById('playlistInspectForm');
-      const fd = new FormData(form);
-      fd.set('action', 'inspect');
       const r = await fetch('{% url "playlist" %}', {
         method: 'POST',
-        headers: {'X-CSRFToken': csrfToken},
-        body: fd,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({action: 'inspect', url: url}),
       });
-      const data = await r.json();
-      if (!data.ok) { window.MF.toast(data.error || 'Failed to load playlist.', 'error'); return; }
+      const data = await r.json().catch(() => null);
+      if (!data) {
+        window.MF.toast('Server returned an invalid response. Please check your URL.', 'error');
+        return;
+      }
+      if (!data.ok) {
+        window.MF.toast(data.error || 'Failed to load playlist.', 'error');
+        return;
+      }
 
       const info = data.info;
       playlistEntries = info.entries || [];
@@ -301,6 +325,12 @@
       btn.innerHTML = '<i class="bi bi-download"></i> Download Selected';
     }
   });
+  const initialPlUrl = document.getElementById('id_pl_url');
+  if (initialPlUrl && initialPlUrl.value.trim().length > 8) {
+    setTimeout(() => {
+      document.getElementById('inspectPlaylistBtn').click();
+    }, 100);
+  }
 })();
 </script>
 {% endblock %}

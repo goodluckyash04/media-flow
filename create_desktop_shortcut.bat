@@ -1,6 +1,6 @@
 @echo off
 title MediaFlow - Create Desktop Shortcut
-setlocal
+setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
@@ -33,5 +33,6 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Press any key to close this window...
-pause >nul
+echo [INFO] Shortcut setup complete.
+echo.
+pause

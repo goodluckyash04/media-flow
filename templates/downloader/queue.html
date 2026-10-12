@@ -7,12 +7,7 @@
 <div class="page-header d-flex align-items-center">
   <div>
     <h1>Queue</h1>
-    <p class="page-subtitle">Active, completed, and failed jobs</p>
-  </div>
-  <div class="ms-auto d-flex gap-2">
-    <a href="{% url 'download' %}" class="btn btn-primary">
-      <i class="bi bi-plus-lg"></i> New Download
-    </a>
+    <p class="page-subtitle">Active and recent job operations</p>
   </div>
 </div>
 
@@ -63,7 +58,7 @@
               {% endif %}
             </td>
             <td style="font-size:0.8rem;color:var(--text-muted);">{{ job.get_job_type_display }}</td>
-            <td style="font-size:0.8rem;">{{ job.output_format|upper }}</td>
+            <td style="font-size:0.8rem;"><span class="badge" style="background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-subtle);font-weight:500;">{{ job.audio_summary_display|default:job.output_format|upper }}</span></td>
             <td><span class="badge badge-{{ job.status }}">{{ job.get_status_display }}</span></td>
             <td style="min-width:120px;" class="job-progress-cell">
               {% if job.is_active %}
